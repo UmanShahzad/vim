@@ -22,7 +22,7 @@ if exists("loaded_matchit")
  unlet s:conditionalEnd
 endif
 
-setlocal suffixesadd=.m
+setlocal suffixesadd=.matlab
 setlocal suffixes+=.asv
 setlocal commentstring=%\ %s
 

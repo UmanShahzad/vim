@@ -987,7 +987,7 @@ au BufNewFile,BufRead *.markdown,*.mdown,*.mkd,*.mkdn,*.mdwn,*.md  setf markdown
 au BufNewFile,BufRead *.mason,*.mhtml,*.comp	setf mason
 
 " Mathematica, Matlab, Murphi or Objective C
-au BufNewFile,BufRead *.m			call dist#ft#FTm()
+au BufNewFile,BufRead *.matlab			call dist#ft#FTm()
 
 " Mathematica notebook
 au BufNewFile,BufRead *.nb			setf mma
@@ -1018,6 +1018,9 @@ au BufNewFile,BufRead *.mgl			setf mgl
 
 " MIX - Knuth assembly
 au BufNewFile,BufRead *.mix,*.mixal		setf mix
+
+" mlang
+au BufNewFile,BufRead *.m	setf mlang
 
 " MMIX or VMS makefile
 au BufNewFile,BufRead *.mms			call dist#ft#FTmms()
