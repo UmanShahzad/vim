@@ -477,12 +477,16 @@ syn keyword     cType           ch8_t
 syn keyword     cType           ch16_t
 syn keyword     cType           ch32_t
 syn keyword     cType           ch64_t
+syn keyword     cType           fd_t
 
 " This was missing from the official file.
-syn keyword    cStorageClass   sigjmp_buf
+syn keyword     cStorageClass   sigjmp_buf
 
 " binary numbers with 0b prefix.
 syn match       cNumber         display contained "0b[0,1]\+\(u\=l\{0,2}\|ll\=u\)\>"
+
+" match against return codes.
+syn match       cConstant       display "RC_[0-9A-Z_]\+"
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 " Define the default highlighting.
