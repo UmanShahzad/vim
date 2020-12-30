@@ -83,9 +83,11 @@ typedef struct VimMenu vimmenu_T;
  * sc_version is also here, for convenience.
  */
 typedef struct {
+#ifdef FEAT_EVAL
     scid_T	sc_sid;		// script ID
     int		sc_seq;		// sourcing sequence number
     linenr_T	sc_lnum;	// line number
+#endif
     int		sc_version;	// :scriptversion
 } sctx_T;
 
@@ -1224,8 +1226,8 @@ struct mapblock
     char	m_silent;	// <silent> used, don't echo commands
     char	m_nowait;	// <nowait> used
 #ifdef FEAT_EVAL
-    char	m_expr;		// <expr> used, m_str is an expression
     sctx_T	m_script_ctx;	// SCTX where map was defined
+    char	m_expr;		// <expr> used, m_str is an expression
 #endif
 };
 
@@ -1563,9 +1565,12 @@ typedef void (*cfunc_free_T)(void *state);
 // type of getline() last argument
 typedef enum {
     GETLINE_NONE,	    // do not concatenate any lines
-    GETLINE_CONCAT_CONT,    // concatenate continuation lines
+    GETLINE_CONCAT_CONT,    // concatenate continuation lines with backslash
+    GETLINE_CONCAT_CONTBAR, // concatenate continuation lines with \ and |
     GETLINE_CONCAT_ALL	    // concatenate continuation and Vim9 # comment lines
 } getline_opt_T;
+
+typedef struct svar_S svar_T;
 
 #if defined(FEAT_EVAL) || defined(PROTO)
 typedef struct funccall_S funccall_T;
@@ -1766,28 +1771,30 @@ struct sallvar_S {
 /*
  * Entry for "sn_var_vals".  Used for script-local variables.
  */
-typedef struct {
+struct svar_S {
     char_u	*sv_name;	// points into "sn_all_vars" di_key
     typval_T	*sv_tv;		// points into "sn_vars" or "sn_all_vars" di_tv
     type_T	*sv_type;
     int		sv_const;
     int		sv_export;	// "export let var = val"
-} svar_T;
+};
 
 typedef struct {
     char_u	*imp_name;	    // name imported as (allocated)
     int		imp_sid;	    // script ID of "from"
 
-    // for "import * as Name", "imp_name" is "Name"
-    int		imp_all;
+    int		imp_flags;	    // IMP_FLAGS_ values
 
-    // for variable
+    // for a variable
     type_T	*imp_type;
     int		imp_var_vals_idx;   // index in sn_var_vals of "from"
 
-    // for function
+    // for a function
     char_u	*imp_funcname;	    // user func name (NOT allocated)
 } imported_T;
+
+#define IMP_FLAGS_STAR		1   // using "import * as Name"
+#define IMP_FLAGS_RELOAD	2   // script reloaded, OK to redefine
 
 /*
  * Info about an already sourced scripts.
@@ -1821,7 +1828,7 @@ typedef struct
     int		sn_last_block_id;  // Unique ID for each script block
 
     int		sn_version;	// :scriptversion
-    int		sn_had_command;	// TRUE if any command was executed
+    int		sn_state;	// SN_STATE_ values
     char_u	*sn_save_cpo;	// 'cpo' value when :vim9script found
 
 # ifdef FEAT_PROFILE
@@ -1844,6 +1851,10 @@ typedef struct
     int		sn_prl_execed;	// line being timed was executed
 # endif
 } scriptitem_T;
+
+#define SN_STATE_NEW		0   // newly loaded script, nothing done
+#define SN_STATE_RELOAD		1   // script loaded before, nothing done
+#define SN_STATE_HAD_COMMAND	9   // a command was executed
 
 // Struct passed through eval() functions.
 // See EVALARG_EVALUATE for a fixed value with eval_flags set to EVAL_EVALUATE.
@@ -4158,9 +4169,7 @@ typedef struct {
     int		save_finish_op;
     int		save_opcount;
     int		save_reg_executing;
-#ifdef FEAT_EVAL
     int		save_script_version;
-#endif
     tasave_T	tabuf;
 } save_state_T;
 

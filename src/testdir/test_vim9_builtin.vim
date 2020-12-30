@@ -321,6 +321,11 @@ def Test_filter_return_type()
   res->assert_equal(6)
 enddef
 
+def Test_filter_missing_argument()
+  var dict = {aa: [1], ab: [2], ac: [3], de: [4]}
+  var res = dict->filter({k -> k =~ 'a' && k !~ 'b'})
+  res->assert_equal({aa: [1], ac: [3]})
+enddef
 
 def Test_garbagecollect()
   garbagecollect(true)
@@ -710,6 +715,16 @@ def Test_win_splitmove()
   win_splitmove(1, 2, {vertical: true, rightbelow: true})
   close
 enddef
+
+def Test_winrestcmd()
+  split
+  var cmd = winrestcmd()
+  wincmd _
+  exe cmd
+  assert_equal(cmd, winrestcmd())
+  close
+enddef
+
 
 
 " vim: ts=8 sw=2 sts=2 expandtab tw=80 fdm=marker

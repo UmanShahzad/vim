@@ -304,7 +304,6 @@ static void	ex_tag_cmd(exarg_T *eap, char_u *name);
 # define ex_try			ex_ni
 # define ex_unlet		ex_ni
 # define ex_unlockvar		ex_ni
-# define ex_vim9script		ex_ni
 # define ex_while		ex_ni
 # define ex_import		ex_ni
 # define ex_export		ex_ni
@@ -890,7 +889,8 @@ do_cmdline(
 #else
 		    0
 #endif
-		    , TRUE)) == NULL)
+		    , in_vim9script() ? GETLINE_CONCAT_CONTBAR
+					       : GETLINE_CONCAT_CONT)) == NULL)
 	    {
 		// Don't call wait_return for aborted command line.  The NULL
 		// returned for the end of a sourced file or executed function
@@ -1839,7 +1839,7 @@ do_one_cmd(
 	    // message.
 	    if (ar > ea.cmd)
 	    {
-		emsg(_(e_colon_required_before_a_range));
+		semsg(_(e_colon_required_before_range_str), ea.cmd);
 		goto doend;
 	    }
 	}
@@ -2594,7 +2594,7 @@ do_one_cmd(
     // Set flag that any command was executed, used by ex_vim9script().
     if (getline_equal(ea.getline, ea.cookie, getsourceline)
 						    && current_sctx.sc_sid > 0)
-	SCRIPT_ITEM(current_sctx.sc_sid)->sn_had_command = TRUE;
+	SCRIPT_ITEM(current_sctx.sc_sid)->sn_state = SN_STATE_HAD_COMMAND;
 
     /*
      * If the command just executed called do_cmdline(), any throw or ":return"
@@ -3532,7 +3532,7 @@ find_ex_command(
 
 #ifdef FEAT_EVAL
     if (eap->cmdidx != CMD_SIZE && in_vim9script()
-	    && !IS_WHITE_OR_NUL(*p) && !ends_excmd(*p) && *p != '!'
+	    && !IS_WHITE_OR_NUL(*p) && *p != '\n' && *p != '!'
 	    && (cmdnames[eap->cmdidx].cmd_argt & EX_NONWHITE_OK) == 0)
     {
 	semsg(_(e_command_not_followed_by_white_space_str), eap->cmd);
@@ -8011,10 +8011,9 @@ save_current_state(save_state_T *sst)
     msg_scroll = FALSE;		    // no msg scrolling in Normal mode
     restart_edit = 0;		    // don't go to Insert mode
     p_im = FALSE;		    // don't use 'insertmode'
-#ifdef FEAT_EVAL
+
     sst->save_script_version = current_sctx.sc_version;
     current_sctx.sc_version = 1;    // not in Vim9 script
-#endif
 
     /*
      * Save the current typeahead.  This is required to allow using ":normal"
@@ -8038,9 +8037,7 @@ restore_current_state(save_state_T *sst)
     opcount = sst->save_opcount;
     reg_executing = sst->save_reg_executing;
     msg_didout |= sst->save_msg_didout;	// don't reset msg_didout now
-#ifdef FEAT_EVAL
     current_sctx.sc_version = sst->save_script_version;
-#endif
 
     // Restore the state (needed when called from a function executed for
     // 'indentexpr'). Update the mouse and cursor, they may have changed.
@@ -8535,18 +8532,19 @@ find_cmdline_var(char_u *src, int *usedlen)
 /*
  * Evaluate cmdline variables.
  *
- * change '%'	    to curbuf->b_ffname
- *	  '#'	    to curwin->w_alt_fnum
- *	  '<cword>' to word under the cursor
- *	  '<cWORD>' to WORD under the cursor
- *	  '<cexpr>' to C-expression under the cursor
- *	  '<cfile>' to path name under the cursor
- *	  '<sfile>' to sourced file name
- *	  '<stack>' to call stack
- *	  '<slnum>' to sourced file line number
- *	  '<afile>' to file name for autocommand
- *	  '<abuf>'  to buffer number for autocommand
- *	  '<amatch>' to matching name for autocommand
+ * change "%"	    to curbuf->b_ffname
+ *	  "#"	    to curwin->w_alt_fnum
+ *	  "%%"	    to curwin->w_alt_fnum in Vim9 script
+ *	  "<cword>" to word under the cursor
+ *	  "<cWORD>" to WORD under the cursor
+ *	  "<cexpr>" to C-expression under the cursor
+ *	  "<cfile>" to path name under the cursor
+ *	  "<sfile>" to sourced file name
+ *	  "<stack>" to call stack
+ *	  "<slnum>" to sourced file line number
+ *	  "<afile>" to file name for autocommand
+ *	  "<abuf>"  to buffer number for autocommand
+ *	  "<amatch>" to matching name for autocommand
  *
  * When an error is detected, "errormsg" is set to a non-NULL pointer (may be
  * "" for error without a message) and NULL is returned.
@@ -8627,47 +8625,60 @@ eval_vars(
      */
     else
     {
+	int off = 0;
+
 	switch (spec_idx)
 	{
-	case SPEC_PERC:		// '%': current file
-		if (curbuf->b_fname == NULL)
+	case SPEC_PERC:
+#ifdef FEAT_EVAL
+		if (!in_vim9script() || src[1] != '%')
+#endif
 		{
-		    result = (char_u *)"";
-		    valid = 0;	    // Must have ":p:h" to be valid
+		    // '%': current file
+		    if (curbuf->b_fname == NULL)
+		    {
+			result = (char_u *)"";
+			valid = 0;	    // Must have ":p:h" to be valid
+		    }
+		    else
+		    {
+			result = curbuf->b_fname;
+			tilde_file = STRCMP(result, "~") == 0;
+		    }
+		    break;
 		}
-		else
-		{
-		    result = curbuf->b_fname;
-		    tilde_file = STRCMP(result, "~") == 0;
-		}
-		break;
-
+#ifdef FEAT_EVAL
+		// "%%" alternate file
+		off = 1;
+#endif
+		// FALLTHROUGH
 	case SPEC_HASH:		// '#' or "#99": alternate file
-		if (src[1] == '#')  // "##": the argument list
+		if (off == 0 ? src[1] == '#' : src[2] == '%')
 		{
+		    // "##" or "%%%": the argument list
 		    result = arg_all();
 		    resultbuf = result;
-		    *usedlen = 2;
+		    *usedlen = off + 2;
 		    if (escaped != NULL)
 			*escaped = TRUE;
 		    skip_mod = TRUE;
 		    break;
 		}
-		s = src + 1;
+		s = src + off + 1;
 		if (*s == '<')		// "#<99" uses v:oldfiles
 		    ++s;
 		i = (int)getdigits(&s);
-		if (s == src + 2 && src[1] == '-')
+		if (s == src + off + 2 && src[off + 1] == '-')
 		    // just a minus sign, don't skip over it
 		    s--;
 		*usedlen = (int)(s - src); // length of what we expand
 
-		if (src[1] == '<' && i != 0)
+		if (src[off + 1] == '<' && i != 0)
 		{
-		    if (*usedlen < 2)
+		    if (*usedlen < off + 2)
 		    {
 			// Should we give an error message for #<text?
-			*usedlen = 1;
+			*usedlen = off + 1;
 			return NULL;
 		    }
 #ifdef FEAT_EVAL
@@ -8685,8 +8696,8 @@ eval_vars(
 		}
 		else
 		{
-		    if (i == 0 && src[1] == '<' && *usedlen > 1)
-			*usedlen = 1;
+		    if (i == 0 && src[off + 1] == '<' && *usedlen > off + 1)
+			*usedlen = off + 1;
 		    buf = buflist_findnr(i);
 		    if (buf == NULL)
 		    {

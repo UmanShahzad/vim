@@ -899,6 +899,16 @@ def Test_vim9_import_export()
   writefile(import_star_as_lines_dot_space, 'Ximport.vim')
   assert_fails('source Ximport.vim', 'E1074:', '', 1, 'Func')
 
+  var import_star_as_duplicated =<< trim END
+    vim9script
+    import * as Export from './Xexport.vim'
+    var some = 'other'
+    import * as Export from './Xexport.vim'
+    defcompile
+  END
+  writefile(import_star_as_duplicated, 'Ximport.vim')
+  assert_fails('source Ximport.vim', 'E1073:', '', 4, 'Ximport.vim')
+
   var import_star_as_lines_missing_name =<< trim END
     vim9script
     import * as Export from './Xexport.vim'
@@ -1158,6 +1168,53 @@ def Run_Test_import_fails_on_command_line()
   StopVimInTerminal(buf)
 enddef
 
+def Test_vim9script_reload_noclear()
+  var lines =<< trim END
+    vim9script
+    export var exported = 'thexport'
+  END
+  writefile(lines, 'XExportReload')
+  lines =<< trim END
+    vim9script noclear
+    g:loadCount += 1
+    var s:reloaded = 'init'
+    import exported from './XExportReload'
+
+    def Again(): string
+      return 'again'
+    enddef
+
+    if exists('s:loaded') | finish | endif
+    var s:loaded = true
+
+    var s:notReloaded = 'yes'
+    s:reloaded = 'first'
+    def g:Values(): list<string>
+      return [s:reloaded, s:notReloaded, Again(), Once(), exported]
+    enddef
+
+    def Once(): string
+      return 'once'
+    enddef
+  END
+  writefile(lines, 'XReloaded')
+  g:loadCount = 0
+  source XReloaded
+  assert_equal(1, g:loadCount)
+  assert_equal(['first', 'yes', 'again', 'once', 'thexport'], g:Values())
+  source XReloaded
+  assert_equal(2, g:loadCount)
+  assert_equal(['init', 'yes', 'again', 'once', 'thexport'], g:Values())
+  source XReloaded
+  assert_equal(3, g:loadCount)
+  assert_equal(['init', 'yes', 'again', 'once', 'thexport'], g:Values())
+
+  delete('Xreloaded')
+  delete('XExportReload')
+  delfunc g:Values
+  unlet g:loadCount
+enddef
+
 def Test_vim9script_reload_import()
   var lines =<< trim END
     vim9script
@@ -1205,6 +1262,32 @@ def Test_vim9script_reload_import()
 
   delete('Xreload.vim')
   delete('Ximport.vim')
+enddef
+
+" if a script is reloaded with a script-local variable that changed its type, a
+" compiled function using that variable must fail.
+def Test_script_reload_change_type()
+  var lines =<< trim END
+    vim9script noclear
+    var str = 'string'
+    def g:GetStr(): string
+      return str .. 'xxx'
+    enddef
+  END
+  writefile(lines, 'Xreload.vim')
+  source Xreload.vim
+  echo g:GetStr()
+
+  lines =<< trim END
+    vim9script noclear
+    var str = 1234
+  END
+  writefile(lines, 'Xreload.vim')
+  source Xreload.vim
+  assert_fails('echo g:GetStr()', 'E1150:')
+
+  delfunc g:GetStr
+  delete('Xreload.vim')
 enddef
 
 def s:RetSome(): string
@@ -2132,7 +2215,7 @@ def Test_vim9_comment()
   CheckScriptFailure([
       'vim9script',
       'echo# something',
-      ], 'E121:')
+      ], 'E1144:')
   CheckScriptFailure([
       'echo "yes" # something',
       ], 'E121:')
@@ -2152,7 +2235,7 @@ def Test_vim9_comment()
   CheckScriptFailure([
       'vim9script',
       'exe# something',
-      ], 'E121:')
+      ], 'E1144:')
   CheckScriptFailure([
       'exe "echo" # something',
       ], 'E121:')
@@ -2162,18 +2245,18 @@ def Test_vim9_comment()
       '  echo "yes"',
       'catch',
       'endtry',
-      ], 'E488:')
+      ], 'E1144:')
   CheckScriptFailure([
       'vim9script',
       'try# comment',
       'echo "yes"',
-      ], 'E488:')
+      ], 'E1144:')
   CheckDefFailure([
       'try',
       '  throw#comment',
       'catch',
       'endtry',
-      ], 'E1143:')
+      ], 'E1144:')
   CheckDefFailure([
       'try',
       '  throw "yes"#comment',
@@ -2185,14 +2268,14 @@ def Test_vim9_comment()
       '  echo "yes"',
       'catch# comment',
       'endtry',
-      ], 'E488:')
+      ], 'E1144:')
   CheckScriptFailure([
       'vim9script',
       'try',
       '  echo "yes"',
       'catch# comment',
       'endtry',
-      ], 'E654:')
+      ], 'E1144:')
   CheckDefFailure([
       'try',
       '  echo "yes"',
@@ -2204,14 +2287,14 @@ def Test_vim9_comment()
       'echo "yes"',
       'catch',
       'endtry# comment',
-      ], 'E488:')
+      ], 'E1144:')
   CheckScriptFailure([
       'vim9script',
       'try',
       '  echo "yes"',
       'catch',
       'endtry# comment',
-      ], 'E488:')
+      ], 'E1144:')
 
   CheckScriptSuccess([
       'vim9script',
@@ -2220,7 +2303,7 @@ def Test_vim9_comment()
   CheckScriptFailure([
       'vim9script',
       'hi# comment',
-      ], 'E416:')
+      ], 'E1144:')
   CheckScriptSuccess([
       'vim9script',
       'hi Search # comment',
@@ -2266,7 +2349,7 @@ def Test_vim9_comment()
   CheckScriptFailure([
       'vim9script',
       'match# comment',
-      ], 'E475:')
+      ], 'E1144:')
   CheckScriptSuccess([
       'vim9script',
       'match none # comment',
@@ -2402,7 +2485,7 @@ def Test_vim9_comment()
       'vim9script',
       'command Echo echo# comment',
       'Echo',
-      ], 'E121:')
+      ], 'E1144:')
   delcommand Echo
 
   var curdir = getcwd()
@@ -2447,7 +2530,7 @@ def Test_vim9_comment()
   CheckScriptFailure([
       'vim9script',
       'function# comment',
-      ], 'E129:')
+      ], 'E1144:')
   CheckScriptSuccess([
       'vim9script',
       'function CheckScriptSuccess # comment',
@@ -2516,7 +2599,7 @@ def Test_vim9_comment_gui()
   CheckScriptFailure([
       'vim9script',
       'gui#comment'
-      ], 'E499:')
+      ], 'E1144:')
   CheckScriptFailure([
       'vim9script',
       'gui -f#comment'
@@ -2696,6 +2779,17 @@ def Test_forward_declaration()
 enddef
 
 def Test_source_vim9_from_legacy()
+  var vim9_lines =<< trim END
+    vim9script
+    var local = 'local'
+    g:global = 'global'
+    export var exported = 'exported'
+    export def GetText(): string
+       return 'text'
+    enddef
+  END
+  writefile(vim9_lines, 'Xvim9_script.vim')
+
   var legacy_lines =<< trim END
     source Xvim9_script.vim
 
@@ -2717,19 +2811,7 @@ def Test_source_vim9_from_legacy()
   END
   writefile(legacy_lines, 'Xlegacy_script.vim')
 
-  var vim9_lines =<< trim END
-    vim9script
-    var local = 'local'
-    g:global = 'global'
-    export var exported = 'exported'
-    export def GetText(): string
-       return 'text'
-    enddef
-  END
-  writefile(vim9_lines, 'Xvim9_script.vim')
-
   source Xlegacy_script.vim
-
   assert_equal('global', g:global)
   unlet g:global
 
@@ -3122,6 +3204,11 @@ enddef
 def Test_white_space_after_command()
   var lines =<< trim END
     exit_cb: Func})
+  END
+  CheckDefAndScriptFailure(lines, 'E1144:', 1)
+
+  lines =<< trim END
+    e#
   END
   CheckDefAndScriptFailure(lines, 'E1144:', 1)
 enddef

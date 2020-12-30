@@ -145,7 +145,7 @@ struct cctx_S {
     int		ctx_has_cmdmod;	    // ISN_CMDMOD was generated
 };
 
-static void delete_def_function_contents(dfunc_T *dfunc);
+static void delete_def_function_contents(dfunc_T *dfunc, int mark_deleted);
 
 /*
  * Lookup variable "name" in the local scope and return it in "lvar".
@@ -931,17 +931,8 @@ generate_PUSHNR(cctx_T *cctx, varnumber_T number)
     isn->isn_arg.number = number;
 
     if (number == 0 || number == 1)
-    {
-	type_T	*type = get_type_ptr(cctx->ctx_type_list);
-
 	// A 0 or 1 number can also be used as a bool.
-	if (type != NULL)
-	{
-	    type->tt_type = VAR_NUMBER;
-	    type->tt_flags = TTFLAG_BOOL_OK;
-	    ((type_T **)stack->ga_data)[stack->ga_len - 1] = type;
-	}
-    }
+	((type_T **)stack->ga_data)[stack->ga_len - 1] = &t_number_bool;
     return OK;
 }
 
@@ -1336,6 +1327,7 @@ generate_VIM9SCRIPT(
     sref->sref_sid = sid;
     sref->sref_idx = idx;
     sref->sref_seq = si->sn_script_seq;
+    sref->sref_type = type;
     return OK;
 }
 
@@ -2173,15 +2165,6 @@ free_imported(cctx_T *cctx)
 }
 
 /*
- * Return TRUE if "p" points at a "#".  Does not check for white space.
- */
-    int
-vim9_comment_start(char_u *p)
-{
-    return p[0] == '#';
-}
-
-/*
  * Return a pointer to the next line that isn't empty or only contains a
  * comment. Skips over white space.
  * Returns NULL if there is none.
@@ -2424,7 +2407,7 @@ compile_load_scriptvar(
     import = find_imported(name, 0, cctx);
     if (import != NULL)
     {
-	if (import->imp_all)
+	if (import->imp_flags & IMP_FLAGS_STAR)
 	{
 	    char_u	*p = skipwhite(*end);
 	    char_u	*exp_name;
@@ -2826,9 +2809,8 @@ compile_call(
 	    && compile_load(&p, namebuf + varlen, cctx, FALSE, FALSE) == OK)
     {
 	garray_T    *stack = &cctx->ctx_type_stack;
-	type_T	    *type;
+	type_T	    *type = ((type_T **)stack->ga_data)[stack->ga_len - 1];
 
-	type = ((type_T **)stack->ga_data)[stack->ga_len - 1];
 	res = generate_PCALL(cctx, argcount, namebuf, type, FALSE);
 	goto theend;
     }
@@ -2956,12 +2938,14 @@ compile_list(char_u **arg, cctx_T *cctx, ppconst_T *ppconst)
 }
 
 /*
- * parse a lambda: {arg, arg -> expr}
+ * parse a lambda: "{arg, arg -> expr}" or "(arg, arg) => expr"
  * "*arg" points to the '{'.
+ * Returns OK/FAIL when a lambda is recognized, NOTDONE if it's not a lambda.
  */
     static int
 compile_lambda(char_u **arg, cctx_T *cctx)
 {
+    int		r;
     typval_T	rettv;
     ufunc_T	*ufunc;
     evalarg_T	evalarg;
@@ -2971,10 +2955,11 @@ compile_lambda(char_u **arg, cctx_T *cctx)
     evalarg.eval_cctx = cctx;
 
     // Get the funcref in "rettv".
-    if (get_lambda_tv(arg, &rettv, TRUE, &evalarg) != OK)
+    r = get_lambda_tv(arg, &rettv, TRUE, &evalarg);
+    if (r != OK)
     {
 	clear_evalarg(&evalarg, NULL);
-	return FAIL;
+	return r;
     }
 
     // "rettv" will now be a partial referencing the function.
@@ -3439,6 +3424,19 @@ get_compare_type(char_u *p, int *len, int *type_is)
 }
 
 /*
+ * Skip over an expression, ignoring most errors.
+ */
+    static void
+skip_expr_cctx(char_u **arg, cctx_T *cctx)
+{
+    evalarg_T	evalarg;
+
+    CLEAR_FIELD(evalarg);
+    evalarg.eval_cctx = cctx;
+    skip_expr(arg, &evalarg);
+}
+
+/*
  * Compile code to apply '-', '+' and '!'.
  * When "numeric_only" is TRUE do not apply '!'.
  */
@@ -3494,6 +3492,38 @@ compile_leader(cctx_T *cctx, int numeric_only, char_u *start, char_u **end)
     }
     *end = p;
     return OK;
+}
+
+/*
+ * Compile "(expression)": recursive!
+ * Return FAIL/OK.
+ */
+    static int
+compile_parenthesis(char_u **arg, cctx_T *cctx, ppconst_T *ppconst)
+{
+    int ret;
+
+    *arg = skipwhite(*arg + 1);
+    if (ppconst->pp_used <= PPSIZE - 10)
+    {
+	ret = compile_expr1(arg, cctx, ppconst);
+    }
+    else
+    {
+	// Not enough space in ppconst, flush constants.
+	if (generate_ppconst(cctx, ppconst) == FAIL)
+	    return FAIL;
+	ret = compile_expr0(arg, cctx);
+    }
+    *arg = skipwhite(*arg);
+    if (**arg == ')')
+	++*arg;
+    else if (ret == OK)
+    {
+	emsg(_(e_missing_close));
+	ret = FAIL;
+    }
+    return ret;
 }
 
 /*
@@ -3581,10 +3611,42 @@ compile_subscript(
 	    }
 	    else if (**arg == '(')
 	    {
-		// Funcref call:  list->(Refs[2])()
-		// or lambda:	  list->((arg) => expr)()
-		// TODO: make this work
-		if (compile_lambda_call(arg, cctx) == FAIL)
+		int	    argcount = 1;
+		char_u	    *expr;
+		garray_T    *stack;
+		type_T	    *type;
+
+		// Funcref call:  list->(Refs[2])(arg)
+		// or lambda:	  list->((arg) => expr)(arg)
+		// Fist compile the arguments.
+		expr = *arg;
+		*arg = skipwhite(*arg + 1);
+		skip_expr_cctx(arg, cctx);
+		*arg = skipwhite(*arg);
+		if (**arg != ')')
+		{
+		    semsg(_(e_missing_paren), *arg);
+		    return FAIL;
+		}
+		++*arg;
+		if (**arg != '(')
+		{
+		    semsg(_(e_missing_paren), *arg);
+		    return FAIL;
+		}
+
+		*arg = skipwhite(*arg + 1);
+		if (compile_arguments(arg, cctx, &argcount) == FAIL)
+		    return FAIL;
+
+		// Compile the function expression.
+		if (compile_parenthesis(&expr, cctx, ppconst) == FAIL)
+		    return FAIL;
+
+		stack = &cctx->ctx_type_stack;
+		type = ((type_T **)stack->ga_data)[stack->ga_len - 1];
+		if (generate_PCALL(cctx, argcount,
+				(char_u *)"[expression]", type, FALSE) == FAIL)
 		    return FAIL;
 	    }
 	    else
@@ -3933,26 +3995,13 @@ compile_expr7(
 	 * Lambda: {arg, arg -> expr}
 	 * Dictionary: {'key': val, 'key': val}
 	 */
-	case '{':   {
-			char_u	    *start = skipwhite(*arg + 1);
-			char_u	    *after = start;
-			garray_T    ga_arg;
-
-			// Find out what comes after the arguments.
-			ret = get_function_args(&after, '-', NULL,
-					&ga_arg, TRUE, NULL, NULL,
-							     TRUE, NULL, NULL);
-			if (ret != FAIL && after[0] == '>'
-				&& ((after > start + 2
-						     && VIM_ISWHITE(after[-2]))
-				|| after == start + 1)
-				&& IS_WHITE_OR_NUL(after[1]))
-			    // TODO: if we go with the "(arg) => expr" syntax
-			    // remove this
-			    ret = compile_lambda(arg, cctx);
-			else
-			    ret = compile_dict(arg, cctx, ppconst);
-		    }
+	case '{':   // Try parsing as a lambda, if NOTDONE is returned it
+		    // must be a dict.
+		    // TODO: if we go with the "(arg) => expr" syntax remove
+		    // this
+		    ret = compile_lambda(arg, cctx);
+		    if (ret == NOTDONE)
+			ret = compile_dict(arg, cctx, ppconst);
 		    break;
 
 	/*
@@ -3983,53 +4032,10 @@ compile_expr7(
 	 * lambda: (arg, arg) => expr
 	 * funcref: (arg, arg) => { statement }
 	 */
-	case '(':   {
-			char_u	    *start = skipwhite(*arg + 1);
-			char_u	    *after = start;
-			garray_T    ga_arg;
-
-			// Find out if "=>" comes after the ().
-			ret = get_function_args(&after, ')', NULL,
-						     &ga_arg, TRUE, NULL, NULL,
-							     TRUE, NULL, NULL);
-			if (ret == OK && VIM_ISWHITE(
-					    *after == ':' ? after[1] : *after))
-			{
-			    if (*after == ':')
-				// Skip over type in "(arg): type".
-				after = skip_type(skipwhite(after + 1), TRUE);
-
-			    after = skipwhite(after);
-			    if (after[0] == '=' && after[1] == '>'
-						  && IS_WHITE_OR_NUL(after[2]))
-			    {
-				ret = compile_lambda(arg, cctx);
-				break;
-			    }
-			}
-
-			// (expression): recursive!
-			*arg = skipwhite(*arg + 1);
-			if (ppconst->pp_used <= PPSIZE - 10)
-			{
-			    ret = compile_expr1(arg, cctx, ppconst);
-			}
-			else
-			{
-			    // Not enough space in ppconst, flush constants.
-			    if (generate_ppconst(cctx, ppconst) == FAIL)
-				return FAIL;
-			    ret = compile_expr0(arg, cctx);
-			}
-			*arg = skipwhite(*arg);
-			if (**arg == ')')
-			    ++*arg;
-			else if (ret == OK)
-			{
-			    emsg(_(e_missing_close));
-			    ret = FAIL;
-			}
-		    }
+	case '(':   // if compile_lambda returns NOTDONE then it must be (expr)
+		    ret = compile_lambda(arg, cctx);
+		    if (ret == NOTDONE)
+			ret = compile_parenthesis(arg, cctx, ppconst);
 		    break;
 
 	default:    ret = NOTDONE;
@@ -4118,11 +4124,9 @@ compile_expr7t(char_u **arg, cctx_T *cctx, ppconst_T *ppconst)
     // Recognize <type>
     if (**arg == '<' && eval_isnamec1((*arg)[1]))
     {
-	int		called_emsg_before = called_emsg;
-
 	++*arg;
-	want_type = parse_type(arg, cctx->ctx_type_list);
-	if (called_emsg != called_emsg_before)
+	want_type = parse_type(arg, cctx->ctx_type_list, TRUE);
+	if (want_type == NULL)
 	    return FAIL;
 
 	if (**arg != '>')
@@ -4608,7 +4612,7 @@ compile_expr2(char_u **arg, cctx_T *cctx, ppconst_T *ppconst)
  * end:
  */
     static int
-compile_expr1(char_u **arg,  cctx_T *cctx, ppconst_T *ppconst)
+compile_expr1(char_u **arg, cctx_T *cctx, ppconst_T *ppconst)
 {
     char_u	*p;
     int		ppconst_used = ppconst->pp_used;
@@ -4617,11 +4621,7 @@ compile_expr1(char_u **arg,  cctx_T *cctx, ppconst_T *ppconst)
     // Ignore all kinds of errors when not producing code.
     if (cctx->ctx_skip == SKIP_YES)
     {
-	evalarg_T	evalarg;
-
-	CLEAR_FIELD(evalarg);
-	evalarg.eval_cctx = cctx;
-	skip_expr(arg, &evalarg);
+	skip_expr_cctx(arg, cctx);
 	return OK;
     }
 
@@ -4809,7 +4809,7 @@ compile_expr0(char_u **arg,  cctx_T *cctx)
  * compile "return [expr]"
  */
     static char_u *
-compile_return(char_u *arg, int set_return_type, cctx_T *cctx)
+compile_return(char_u *arg, int check_return_type, cctx_T *cctx)
 {
     char_u	*p = arg;
     garray_T	*stack = &cctx->ctx_type_stack;
@@ -4824,8 +4824,10 @@ compile_return(char_u *arg, int set_return_type, cctx_T *cctx)
 	if (cctx->ctx_skip != SKIP_YES)
 	{
 	    stack_type = ((type_T **)stack->ga_data)[stack->ga_len - 1];
-	    if (set_return_type)
+	    if (check_return_type && cctx->ctx_ufunc->uf_ret_type == NULL)
+	    {
 		cctx->ctx_ufunc->uf_ret_type = stack_type;
+	    }
 	    else
 	    {
 		if (cctx->ctx_ufunc->uf_ret_type->tt_type == VAR_VOID
@@ -4843,7 +4845,7 @@ compile_return(char_u *arg, int set_return_type, cctx_T *cctx)
     }
     else
     {
-	// "set_return_type" cannot be TRUE, only used for a lambda which
+	// "check_return_type" cannot be TRUE, only used for a lambda which
 	// always has an argument.
 	if (cctx->ctx_ufunc->uf_ret_type->tt_type != VAR_VOID
 		&& cctx->ctx_ufunc->uf_ret_type->tt_type != VAR_UNKNOWN)
@@ -5636,7 +5638,9 @@ compile_assignment(char_u *arg, exarg_T *eap, cmdidx_T cmdidx, cctx_T *cctx)
 		    goto theend;
 		}
 		p = skipwhite(var_end + 1);
-		type = parse_type(&p, cctx->ctx_type_list);
+		type = parse_type(&p, cctx->ctx_type_list, TRUE);
+		if (type == NULL)
+		    goto theend;
 		has_type = TRUE;
 	    }
 	    else if (lvar != NULL)
@@ -7322,6 +7326,19 @@ compile_exec(char_u *line, exarg_T *eap, cctx_T *cctx)
 	    eap->arg = skiptowhite(eap->arg);
     }
 
+    if ((eap->cmdidx == CMD_global || eap->cmdidx == CMD_vglobal)
+						       && STRLEN(eap->arg) > 4)
+    {
+	int delim = *eap->arg;
+
+	p = skip_regexp_ex(eap->arg + 1, delim, TRUE, NULL, NULL);
+	if (*p == delim)
+	{
+	    eap->arg = p + 1;
+	    has_expr = TRUE;
+	}
+    }
+
     if (has_expr && (p = (char_u *)strstr((char *)eap->arg, "`=")) != NULL)
     {
 	int	count = 0;
@@ -7417,15 +7434,16 @@ add_def_function(ufunc_T *ufunc)
  * After ex_function() has collected all the function lines: parse and compile
  * the lines into instructions.
  * Adds the function to "def_functions".
- * When "set_return_type" is set then set ufunc->uf_ret_type to the type of the
- * return statement (used for lambda).
+ * When "check_return_type" is set then set ufunc->uf_ret_type to the type of
+ * the return statement (used for lambda).  When uf_ret_type is already set
+ * then check that it matches.
  * "outer_cctx" is set for a nested function.
  * This can be used recursively through compile_lambda(), which may reallocate
  * "def_functions".
  * Returns OK or FAIL.
  */
     int
-compile_def_function(ufunc_T *ufunc, int set_return_type, cctx_T *outer_cctx)
+compile_def_function(ufunc_T *ufunc, int check_return_type, cctx_T *outer_cctx)
 {
     char_u	*line = NULL;
     char_u	*p;
@@ -7440,12 +7458,12 @@ compile_def_function(ufunc_T *ufunc, int set_return_type, cctx_T *outer_cctx)
     int		new_def_function = FALSE;
 
     // When using a function that was compiled before: Free old instructions.
-    // Otherwise add a new entry in "def_functions".
+    // The index is reused.  Otherwise add a new entry in "def_functions".
     if (ufunc->uf_dfunc_idx > 0)
     {
 	dfunc_T *dfunc = ((dfunc_T *)def_functions.ga_data)
 							 + ufunc->uf_dfunc_idx;
-	delete_def_function_contents(dfunc);
+	delete_def_function_contents(dfunc, FALSE);
     }
     else
     {
@@ -7720,7 +7738,7 @@ compile_def_function(ufunc_T *ufunc, int set_return_type, cctx_T *outer_cctx)
 	    {
 		if (!starts_with_colon)
 		{
-		    emsg(_(e_colon_required_before_a_range));
+		    semsg(_(e_colon_required_before_range_str), cmd);
 		    goto erret;
 		}
 		if (ends_excmd2(line, ea.cmd))
@@ -7797,7 +7815,7 @@ compile_def_function(ufunc_T *ufunc, int set_return_type, cctx_T *outer_cctx)
 		    goto erret;
 
 	    case CMD_return:
-		    line = compile_return(p, set_return_type, &cctx);
+		    line = compile_return(p, check_return_type, &cctx);
 		    cctx.ctx_had_return = TRUE;
 		    break;
 
@@ -8286,7 +8304,7 @@ delete_instr(isn_T *isn)
  * Free all instructions for "dfunc" except df_name.
  */
     static void
-delete_def_function_contents(dfunc_T *dfunc)
+delete_def_function_contents(dfunc_T *dfunc, int mark_deleted)
 {
     int idx;
 
@@ -8297,9 +8315,13 @@ delete_def_function_contents(dfunc_T *dfunc)
 	for (idx = 0; idx < dfunc->df_instr_count; ++idx)
 	    delete_instr(dfunc->df_instr + idx);
 	VIM_CLEAR(dfunc->df_instr);
+	dfunc->df_instr = NULL;
     }
 
-    dfunc->df_deleted = TRUE;
+    if (mark_deleted)
+	dfunc->df_deleted = TRUE;
+    if (dfunc->df_ufunc != NULL)
+	dfunc->df_ufunc->uf_def_status = UF_NOT_COMPILED;
 }
 
 /*
@@ -8316,7 +8338,7 @@ unlink_def_function(ufunc_T *ufunc)
 							 + ufunc->uf_dfunc_idx;
 
 	if (--dfunc->df_refcount <= 0)
-	    delete_def_function_contents(dfunc);
+	    delete_def_function_contents(dfunc, TRUE);
 	ufunc->uf_def_status = UF_NOT_COMPILED;
 	ufunc->uf_dfunc_idx = 0;
 	if (dfunc->df_ufunc == ufunc)
@@ -8352,7 +8374,7 @@ free_def_functions(void)
     {
 	dfunc_T *dfunc = ((dfunc_T *)def_functions.ga_data) + idx;
 
-	delete_def_function_contents(dfunc);
+	delete_def_function_contents(dfunc, TRUE);
 	vim_free(dfunc->df_name);
     }
 

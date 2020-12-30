@@ -868,7 +868,9 @@ get_lval(
 		char_u	 *tp = skipwhite(p + 1);
 
 		// parse the type after the name
-		lp->ll_type = parse_type(&tp, &si->sn_type_list);
+		lp->ll_type = parse_type(&tp, &si->sn_type_list, !quiet);
+		if (lp->ll_type == NULL && !quiet)
+		    return NULL;
 		lp->ll_name_end = tp;
 	    }
 	}
@@ -3347,8 +3349,13 @@ eval7(
 
     /*
      * nested expression: (expression).
+     * lambda: (arg) => expr
      */
-    case '(':	{
+    case '(':	ret = NOTDONE;
+		if (in_vim9script())
+		    ret = get_lambda_tv(arg, rettv, TRUE, evalarg);
+		if (ret == NOTDONE)
+		{
 		    *arg = skipwhite_and_linebreak(*arg + 1, evalarg);
 		    ret = eval1(arg, rettv, evalarg);	// recursive!
 
