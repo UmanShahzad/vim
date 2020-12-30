@@ -451,42 +451,71 @@ endif
 
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " mlang extensions from c
+
+syn keyword     cStatement      fn output defer check
+syn keyword     cRepeat         loop
+syn keyword     cTypedef        type
+syn match       cCompilerHint   "@unused"
+syn match       cCompilerHint   "@inline"
+syn match       cCompilerHint   "@no_inline"
+syn match       cCompilerHint   "@priv"
+syn match       cCompilerHint   "@flags"
+syn match       cCompilerHint   "@import"
 syn keyword     cOperator       STATIC_OFFSET
 syn keyword     cOperator       STATIC_CONTAINER
 syn keyword     cOperator       STATIC_SIZE
 syn keyword     cOperator       STATIC_LEN_CSTR
 syn keyword     cOperator       STATIC_ASSERT
+syn keyword     cOperator       LOG LOG_V LOG_I LOG_W LOG_E
+syn keyword     cOperator       ASSERT
+syn keyword     cOperator       ASSERT_ADDR_EQ
+syn keyword     cOperator       ASSERT_ADDR_NEQ
+syn keyword     cOperator       ASSERT_BYTES_EQ
+syn keyword     cOperator       ASSERT_BYTES_EQ_C
+syn keyword     cOperator       ASSERT_BYTES_NEQ
+syn keyword     cOperator       ASSERT_BYTES_NEQ_C
+syn keyword     cOperator       ASSERT_CSTR_LEN
+syn keyword     cOperator       ASSERT_CSTR_EQ
+syn keyword     cOperator       ASSERT_CSTR_NEQ
+syn keyword     cOperator       ASSERT_CSTR_NLEN
+syn keyword     cOperator       ASSERT_CSTR_NPRE
+syn keyword     cOperator       ASSERT_CSTR_NSUB
+syn keyword     cOperator       ASSERT_CSTR_PRE
+syn keyword     cOperator       ASSERT_CSTR_SUB
+syn keyword     cOperator       ASSERT_EQ
+syn keyword     cOperator       ASSERT_FALSE
+syn keyword     cOperator       ASSERT_GT
+syn keyword     cOperator       ASSERT_GTE
+syn keyword     cOperator       ASSERT_LT
+syn keyword     cOperator       ASSERT_LTE
+syn keyword     cOperator       ASSERT_NEG1
+syn keyword     cOperator       ASSERT_NEQ
+syn keyword     cOperator       ASSERT_NNULL
+syn keyword     cOperator       ASSERT_NULL
+syn keyword     cOperator       ASSERT_TRUE
+syn keyword     cOperator       ASSERT_ZERO
+syn keyword     cCompilerHint   UNLIKELY LIKELY
+syn keyword     cCompilerHint   PTR
+syn keyword     cStorageClass   OUT
 syn keyword     cStorageClass   UNUSED
-syn keyword     cType           rc_t
-syn keyword     cType           rc8_t
-syn keyword     cType           rc16_t
-syn keyword     cType           rc32_t
-syn keyword     cType           rc64_t
-syn keyword     cType           u8_t
-syn keyword     cType           u16_t
-syn keyword     cType           u32_t
-syn keyword     cType           u64_t
-syn keyword     cType           s8_t
-syn keyword     cType           s16_t
-syn keyword     cType           s32_t
-syn keyword     cType           s64_t
-syn keyword     cType           f32_t
-syn keyword     cType           f64_t
-syn keyword     cType           f128_t
-syn keyword     cType           ch8_t
-syn keyword     cType           ch16_t
-syn keyword     cType           ch32_t
-syn keyword     cType           ch64_t
+syn keyword     cType           rc_t rc8_t rc16_t rc32_t rc64_t
+syn keyword     cType           u8_t u16_t u32_t u64_t
+syn keyword     cType           s8_t s16_t s32_t s64_t
+syn keyword     cType           f32_t f64_t f128_t
+syn keyword     cType           ch8_t ch16_t ch32_t ch64_t
 syn keyword     cType           fd_t
 
 " This was missing from the official file.
 syn keyword     cStorageClass   sigjmp_buf
 
 " binary numbers with 0b prefix.
-syn match       cNumber         display contained "0b[0,1]\+\(u\=l\{0,2}\|ll\=u\)\>"
+syn match       cNumber         display contained "0b[0,1,_]\+\(u\=l\{0,2}\|ll\=u\)\>"
 
 " match against return codes.
 syn match       cConstant       display "RC_[0-9A-Z_]\+"
+
+" e.g. @unused
+hi def link     cCompilerHint   Keyword
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 " Define the default highlighting.
