@@ -512,7 +512,7 @@ syn keyword     cStorageClass   sigjmp_buf
 syn match       cNumber         display contained "0b[0,1,_]\+\(u\=l\{0,2}\|ll\=u\)\>"
 
 " match against return codes.
-syn match       cConstant       display "RC_[0-9A-Z_]\+"
+syn match       cConstant       display "\<RC_[0-9A-Z_]\+\>"
 
 " e.g. @unused
 hi def link     cCompilerHint   Keyword
