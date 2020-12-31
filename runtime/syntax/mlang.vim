@@ -516,6 +516,61 @@ syn match       cConstant       display "\<RC_[0-9A-Z_]\+\>"
 
 " e.g. @unused
 hi def link     cCompilerHint   Keyword
+
+" some missing errnos from linux
+syn keyword     cConstant       ECHRNG
+syn keyword     cConstant       EL2NSYNC
+syn keyword     cConstant       EL3HLT
+syn keyword     cConstant       EL3RST
+syn keyword     cConstant       ELNRNG
+syn keyword     cConstant       EUNATCH
+syn keyword     cConstant       ENOCSI
+syn keyword     cConstant       EL2HLT
+syn keyword     cConstant       EBADE
+syn keyword     cConstant       EBADR
+syn keyword     cConstant       EXFULL
+syn keyword     cConstant       ENOANO
+syn keyword     cConstant       EBADRQC
+syn keyword     cConstant       EBADSLT
+syn keyword     cConstant       EDEADLOCK
+syn keyword     cConstant       EBFONT
+syn keyword     cConstant       ENONET
+syn keyword     cConstant       ENOPKG
+syn keyword     cConstant       EREMOTE
+syn keyword     cConstant       EADV
+syn keyword     cConstant       ESRMNT
+syn keyword     cConstant       ECOMM
+syn keyword     cConstant       EDOTDOT
+syn keyword     cConstant       ENOTUNIQ
+syn keyword     cConstant       EBADFD
+syn keyword     cConstant       EREMCHG
+syn keyword     cConstant       ELIBACC
+syn keyword     cConstant       ELIBBAD
+syn keyword     cConstant       ELIBSCN
+syn keyword     cConstant       ELIBMAX
+syn keyword     cConstant       ELIBEXEC
+syn keyword     cConstant       ERESTART
+syn keyword     cConstant       ESTRPIPE
+syn keyword     cConstant       EUSERS
+syn keyword     cConstant       ESOCKTNOSUPPORT
+syn keyword     cConstant       EPFNOSUPPORT
+syn keyword     cConstant       ESHUTDOWN
+syn keyword     cConstant       ETOOMANYREFS
+syn keyword     cConstant       EHOSTDOWN
+syn keyword     cConstant       EUCLEAN
+syn keyword     cConstant       ENOTNAM
+syn keyword     cConstant       ENAVAIL
+syn keyword     cConstant       EISNAM
+syn keyword     cConstant       EREMOTEIO
+syn keyword     cConstant       ENOMEDIUM
+syn keyword     cConstant       EMEDIUMTYPE
+syn keyword     cConstant       ENOKEY
+syn keyword     cConstant       EKEYEXPIRED
+syn keyword     cConstant       EKEYREVOKED
+syn keyword     cConstant       EKEYREJECTED
+syn keyword     cConstant       ERFKILL
+syn keyword     cConstant       EHWPOISON
+
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 " Define the default highlighting.
