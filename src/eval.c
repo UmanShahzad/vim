@@ -3316,7 +3316,10 @@ eval7(
      * Lambda: {arg, arg -> expr}
      * Dictionary: {'key': val, 'key': val}
      */
-    case '{':	ret = get_lambda_tv(arg, rettv, in_vim9script(), evalarg);
+    case '{':	if (in_vim9script())
+		    ret = NOTDONE;
+		else
+		    ret = get_lambda_tv(arg, rettv, in_vim9script(), evalarg);
 		if (ret == NOTDONE)
 		    ret = eval_dict(arg, rettv, evalarg, FALSE);
 		break;
@@ -3617,7 +3620,24 @@ eval_lambda(
     *arg += 2;
     rettv->v_type = VAR_UNKNOWN;
 
-    ret = get_lambda_tv(arg, rettv, FALSE, evalarg);
+    if (**arg == '{')
+    {
+	// ->{lambda}()
+	ret = get_lambda_tv(arg, rettv, FALSE, evalarg);
+    }
+    else
+    {
+	// ->(lambda)()
+	++*arg;
+	ret = eval1(arg, rettv, evalarg);
+	*arg = skipwhite_and_linebreak(*arg, evalarg);
+	if (**arg != ')')
+	{
+	    emsg(_(e_missing_close));
+	    ret = FAIL;
+	}
+	++*arg;
+    }
     if (ret != OK)
 	return FAIL;
     else if (**arg != '(')
@@ -3725,6 +3745,7 @@ eval_index(
     int		range = FALSE;
     char_u	*key = NULL;
     int		keylen = -1;
+    int		vim9 = in_vim9script();
 
     if (check_can_index(rettv, evaluate, verbose) == FAIL)
 	return FAIL;
@@ -3755,6 +3776,12 @@ eval_index(
 	    empty1 = TRUE;
 	else if (eval1(arg, &var1, evalarg) == FAIL)	// recursive!
 	    return FAIL;
+	else if (vim9 && **arg == ':')
+	{
+	    semsg(_(e_white_space_required_before_and_after_str), ":");
+	    clear_tv(&var1);
+	    return FAIL;
+	}
 	else if (evaluate && tv_get_string_chk(&var1) == NULL)
 	{
 	    // not a number or string
@@ -3769,7 +3796,15 @@ eval_index(
 	if (**arg == ':')
 	{
 	    range = TRUE;
-	    *arg = skipwhite_and_linebreak(*arg + 1, evalarg);
+	    ++*arg;
+	    if (vim9 && !IS_WHITE_OR_NUL(**arg) && **arg != ']')
+	    {
+		semsg(_(e_white_space_required_before_and_after_str), ":");
+		if (!empty1)
+		    clear_tv(&var1);
+		return FAIL;
+	    }
+	    *arg = skipwhite_and_linebreak(*arg, evalarg);
 	    if (**arg == ']')
 		empty2 = TRUE;
 	    else if (eval1(arg, &var2, evalarg) == FAIL)	// recursive!
@@ -5630,8 +5665,8 @@ handle_subscript(
 	    *arg = p;
 	    if (ret == OK)
 	    {
-		if ((*arg)[2] == '{')
-		    // expr->{lambda}()
+		if (((*arg)[2] == '{' && !in_vim9script()) || (*arg)[2] == '(')
+		    // expr->{lambda}() or expr->(lambda)()
 		    ret = eval_lambda(arg, rettv, evalarg, verbose);
 		else
 		    // expr->name()
