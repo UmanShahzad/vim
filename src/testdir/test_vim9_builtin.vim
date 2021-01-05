@@ -252,6 +252,57 @@ def Test_extend_return_type()
   res->assert_equal(6)
 enddef
 
+func g:ExtendDict(d)
+  call extend(a:d, #{xx: 'x'})
+endfunc
+
+def Test_extend_dict_item_type()
+  var lines =<< trim END
+       var d: dict<number> = {a: 1}
+       extend(d, {b: 2})
+  END
+  CheckDefAndScriptSuccess(lines)
+
+  lines =<< trim END
+       var d: dict<number> = {a: 1}
+       extend(d, {b: 'x'})
+  END
+  CheckDefFailure(lines, 'E1013: Argument 2: type mismatch, expected dict<number> but got dict<string>', 2)
+  CheckScriptFailure(['vim9script'] + lines, 'E1012:', 3)
+
+  lines =<< trim END
+       var d: dict<number> = {a: 1}
+       g:ExtendDict(d)
+  END
+  CheckDefExecFailure(lines, 'E1012: Type mismatch; expected number but got string', 0)
+  CheckScriptFailure(['vim9script'] + lines, 'E1012:', 1)
+enddef
+
+func g:ExtendList(l)
+  call extend(a:l, ['x'])
+endfunc
+
+def Test_extend_list_item_type()
+  var lines =<< trim END
+       var l: list<number> = [1]
+       extend(l, [2])
+  END
+  CheckDefAndScriptSuccess(lines)
+
+  lines =<< trim END
+       var l: list<number> = [1]
+       extend(l, ['x'])
+  END
+  CheckDefFailure(lines, 'E1013: Argument 2: type mismatch, expected list<number> but got list<string>', 2)
+  CheckScriptFailure(['vim9script'] + lines, 'E1012:', 3)
+
+  lines =<< trim END
+       var l: list<number> = [1]
+       g:ExtendList(l)
+  END
+  CheckDefExecFailure(lines, 'E1012: Type mismatch; expected number but got string', 0)
+  CheckScriptFailure(['vim9script'] + lines, 'E1012:', 1)
+enddef
 
 def Wrong_dict_key_type(items: list<number>): list<number>
   return filter(items, (_, val) => get({[val]: 1}, 'x'))
@@ -601,11 +652,21 @@ def Test_setbufvar()
   &syntax->assert_equal('vim')
   setbufvar(bufnr('%'), '&ts', 16)
   &ts->assert_equal(16)
+  setbufvar(bufnr('%'), '&ai', true)
+  &ai->assert_equal(true)
+  setbufvar(bufnr('%'), '&ft', 'filetype')
+  &ft->assert_equal('filetype')
+
   settabwinvar(1, 1, '&syntax', 'vam')
   &syntax->assert_equal('vam')
   settabwinvar(1, 1, '&ts', 15)
   &ts->assert_equal(15)
   setlocal ts=8
+  settabwinvar(1, 1, '&list', false)
+  &list->assert_equal(false)
+  settabwinvar(1, 1, '&list', true)
+  &list->assert_equal(true)
+  setlocal list&
 
   setbufvar('%', 'myvar', 123)
   getbufvar('%', 'myvar')->assert_equal(123)

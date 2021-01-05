@@ -79,6 +79,43 @@ def Test_funcdepth_error()
   set maxfuncdepth&
 enddef
 
+def Test_endfunc_enddef()
+  var lines =<< trim END
+    def Test()
+      echo 'test'
+      endfunc
+    enddef
+  END
+  CheckScriptFailure(lines, 'E1151:', 3)
+
+  lines =<< trim END
+    def Test()
+      func Nested()
+        echo 'test'
+      enddef
+    enddef
+  END
+  CheckScriptFailure(lines, 'E1152:', 4)
+enddef
+
+def Test_missing_endfunc_enddef()
+  var lines =<< trim END
+    vim9script
+    def Test()
+      echo 'test'
+    endef
+  END
+  CheckScriptFailure(lines, 'E1057:', 2)
+
+  lines =<< trim END
+    vim9script
+    func Some()
+      echo 'test'
+    enfffunc
+  END
+  CheckScriptFailure(lines, 'E126:', 2)
+enddef
+
 def ReturnString(): string
   return 'string'
 enddef
@@ -202,6 +239,42 @@ def Test_call_default_args()
   delfunc g:Func
   CheckScriptFailure(['def Func(arg: number = "text")', 'enddef', 'defcompile'], 'E1013: Argument 1: type mismatch, expected number but got string')
   delfunc g:Func
+enddef
+
+def FuncWithComment(  # comment
+  a: number, #comment
+  b: bool, # comment
+  c: string) #comment
+  assert_equal(4, a)
+  assert_equal(true, b)
+  assert_equal('yes', c)
+enddef
+
+def Test_func_with_comments()
+  FuncWithComment(4, true, 'yes')
+
+  var lines =<< trim END
+      def Func(# comment
+        arg: string)
+      enddef
+  END
+  CheckScriptFailure(lines, 'E125:', 1)
+
+  lines =<< trim END
+      def Func(
+        arg: string# comment
+        )
+      enddef
+  END
+  CheckScriptFailure(lines, 'E475:', 2)
+
+  lines =<< trim END
+      def Func(
+        arg: string
+        )# comment
+      enddef
+  END
+  CheckScriptFailure(lines, 'E488:', 3)
 enddef
 
 def Test_nested_function()
@@ -517,6 +590,18 @@ def Test_call_lambda_args()
       echo Ref(1, 'x')
   END
   CheckDefFailure(lines, 'E1013: Argument 2: type mismatch, expected number but got string')
+
+  lines =<< trim END
+    var Ref: func(job, string, number)
+    Ref = (x, y) => 0
+  END
+  CheckDefAndScriptFailure(lines, 'E1012:')
+
+  lines =<< trim END
+    var Ref: func(job, string)
+    Ref = (x, y, z) => 0
+  END
+  CheckDefAndScriptFailure(lines, 'E1012:')
 enddef
 
 def Test_lambda_uses_assigned_var()

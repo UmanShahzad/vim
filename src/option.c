@@ -3835,7 +3835,7 @@ findoption(char_u *arg)
  *
  * Returns:
  * Number option: gov_number, *numval gets value.
- * Tottle option: gov_bool,   *numval gets value.
+ * Toggle option: gov_bool,   *numval gets value.
  * String option: gov_string, *stringval gets allocated string.
  * Hidden Number option: gov_hidden_number.
  * Hidden Toggle option: gov_hidden_bool.
@@ -7009,9 +7009,9 @@ magic_isset(void)
 {
     switch (magic_overruled)
     {
-	case MAGIC_ON:      return TRUE;
-	case MAGIC_OFF:     return FALSE;
-	case MAGIC_NOT_SET: break;
+	case OPTION_MAGIC_ON:      return TRUE;
+	case OPTION_MAGIC_OFF:     return FALSE;
+	case OPTION_MAGIC_NOT_SET: break;
     }
 #ifdef FEAT_EVAL
     if (in_vim9script())

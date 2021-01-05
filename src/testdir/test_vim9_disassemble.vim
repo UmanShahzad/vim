@@ -182,7 +182,7 @@ def Test_disassemble_push()
   var res = execute('disass s:ScriptFuncPush')
   assert_match('<SNR>\d*_ScriptFuncPush.*' ..
         'localbool = true.*' ..
-        ' PUSH v:true.*' ..
+        ' PUSH true.*' ..
         'localspec = v:none.*' ..
         ' PUSH v:none.*' ..
         'localblob = 0z1234.*' ..
@@ -257,6 +257,7 @@ def Test_disassemble_store_member()
   assert_match('<SNR>\d*_ScriptFuncStoreMember\_s*' ..
         'var locallist: list<number> = []\_s*' ..
         '\d NEWLIST size 0\_s*' ..
+        '\d SETTYPE list<number>\_s*' ..
         '\d STORE $0\_s*' ..
         'locallist\[0\] = 123\_s*' ..
         '\d PUSHNR 123\_s*' ..
@@ -265,6 +266,7 @@ def Test_disassemble_store_member()
         '\d STORELIST\_s*' ..
         'var localdict: dict<number> = {}\_s*' ..
         '\d NEWDICT size 0\_s*' ..
+        '\d SETTYPE dict<number>\_s*' ..
         '\d STORE $1\_s*' ..
         'localdict\["a"\] = 456\_s*' ..
         '\d\+ PUSHNR 456\_s*' ..
@@ -347,6 +349,7 @@ def Test_disassemble_list_add()
   assert_match('<SNR>\d*_ListAdd\_s*' ..
         'var l: list<number> = []\_s*' ..
         '\d NEWLIST size 0\_s*' ..
+        '\d SETTYPE list<number>\_s*' ..
         '\d STORE $0\_s*' ..
         'add(l, 123)\_s*' ..
         '\d LOAD $0\_s*' ..
@@ -1034,6 +1037,7 @@ def Test_disassemble_for_loop()
   assert_match('ForLoop\_s*' ..
         'var res: list<number>\_s*' ..
         '\d NEWLIST size 0\_s*' ..
+        '\d SETTYPE list<number>\_s*' ..
         '\d STORE $0\_s*' ..
         'for i in range(3)\_s*' ..
         '\d STORE -1 in $1\_s*' ..
@@ -1137,6 +1141,7 @@ def Test_disassemble_typecast()
         '\d LOADG g:number\_s*' ..
         '\d CHECKTYPE number stack\[-1\]\_s*' ..
         '\d NEWLIST size 2\_s*' ..
+        '\d SETTYPE list<number>\_s*' ..
         '\d STORE $0\_s*' ..
         '\d PUSHNR 0\_s*' ..
         '\d RETURN\_s*',
@@ -1461,7 +1466,7 @@ def Test_disassemble_invert_bool()
   var instr = execute('disassemble InvertBool')
   assert_match('InvertBool\_s*' ..
         'var flag = true\_s*' ..
-        '\d PUSH v:true\_s*' ..
+        '\d PUSH true\_s*' ..
         '\d STORE $0\_s*' ..
         'var invert = !flag\_s*' ..
         '\d LOAD $0\_s*' ..

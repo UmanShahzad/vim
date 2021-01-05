@@ -771,6 +771,24 @@ def Test_f_args()
   CheckScriptSuccess(lines)
 enddef
 
+def Test_user_command_comment()
+  command -nargs=1 Comd echom <q-args>
+
+  var lines =<< trim END
+    vim9script
+    Comd # comment
+  END
+  CheckScriptSuccess(lines)
+
+  lines =<< trim END
+    vim9script
+    Comd# comment
+  END
+  CheckScriptFailure(lines, 'E1144:')
+
+  delcommand Comd
+enddef
+
 def Test_star_command()
   var lines =<< trim END
     vim9script
@@ -798,12 +816,14 @@ def Test_cmd_argument_without_colon()
 enddef
 
 def Test_ambiguous_user_cmd()
+  command Cmd1 eval 0
+  command Cmd2 eval 0
   var lines =<< trim END
-      com Cmd1 eval 0
-      com Cmd2 eval 0
       Cmd
   END
-  CheckScriptFailure(lines, 'E464:')
+  CheckDefAndScriptFailure(lines, 'E464:', 1)
+  delcommand Cmd1
+  delcommand Cmd2
 enddef
 
 def Test_command_not_recognized()
@@ -866,6 +886,16 @@ def Test_insert_complete()
 
   set completefunc=
   bwipe!
+enddef
+
+def Test_wincmd()
+  split
+  var id1 = win_getid()
+  if true
+    try | wincmd w | catch | endtry
+  endif
+  assert_notequal(id1, win_getid())
+  close
 enddef
 
 " vim: ts=8 sw=2 sts=2 expandtab tw=80 fdm=marker
