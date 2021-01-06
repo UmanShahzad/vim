@@ -466,7 +466,7 @@ syn keyword     cOperator       STATIC_CONTAINER
 syn keyword     cOperator       STATIC_SIZE
 syn keyword     cOperator       STATIC_LEN_CSTR
 syn keyword     cOperator       STATIC_ASSERT
-syn keyword     cOperator       LOG LOG_V LOG_I LOG_W LOG_E
+syn keyword     cOperator       LOG LOG_D LOG_V LOG_I LOG_W LOG_E
 syn keyword     cOperator       ASSERT
 syn keyword     cOperator       ASSERT_ADDR_EQ
 syn keyword     cOperator       ASSERT_ADDR_NEQ
