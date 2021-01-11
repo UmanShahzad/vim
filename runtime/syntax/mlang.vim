@@ -464,7 +464,8 @@ syn match       cCompilerHint   "@import"
 syn keyword     cOperator       STATIC_OFFSET
 syn keyword     cOperator       STATIC_CONTAINER
 syn keyword     cOperator       STATIC_SIZE
-syn keyword     cOperator       STATIC_LEN_CSTR
+syn keyword     cOperator       STATIC_ARR_SIZE
+syn keyword     cOperator       STATIC_CSTR_LEN
 syn keyword     cOperator       STATIC_ASSERT
 syn keyword     cOperator       LOG LOG_D LOG_V LOG_I LOG_W LOG_E
 syn keyword     cOperator       ASSERT
