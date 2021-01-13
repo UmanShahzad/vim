@@ -461,6 +461,7 @@ syn match       cCompilerHint   "@no_inline"
 syn match       cCompilerHint   "@priv"
 syn match       cCompilerHint   "@flags"
 syn match       cCompilerHint   "@import"
+syn keyword     cOperator       STATIC_UNREACHABLE
 syn keyword     cOperator       STATIC_OFFSET
 syn keyword     cOperator       STATIC_CONTAINER
 syn keyword     cOperator       STATIC_SIZE
