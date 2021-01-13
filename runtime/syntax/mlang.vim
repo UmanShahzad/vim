@@ -519,6 +519,12 @@ syn match       cConstant       display "\<RC_[0-9A-Z_]\+\>"
 " e.g. @unused
 hi def link     cCompilerHint   Keyword
 
+" mlang limits
+syn keyword cConstant S8_MIN S16_MIN S32_MIN S64_MIN
+syn keyword cConstant S8_MAX S16_MAX S32_MAX S64_MAX
+syn keyword cConstant U8_MIN U16_MIN U32_MIN U64_MIN
+syn keyword cConstant U8_MAX U16_MAX U32_MAX U64_MAX
+
 " some missing errnos from linux
 syn keyword     cConstant       ECHRNG
 syn keyword     cConstant       EL2NSYNC
