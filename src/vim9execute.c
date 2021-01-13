@@ -754,7 +754,7 @@ call_partial(typval_T *tv, int argcount_arg, ectx_T *ectx)
     int		argcount = argcount_arg;
     char_u	*name = NULL;
     int		called_emsg_before = called_emsg;
-    int		res;
+    int		res = FAIL;
 
     if (tv->v_type == VAR_PARTIAL)
     {
@@ -800,7 +800,7 @@ call_partial(typval_T *tv, int argcount_arg, ectx_T *ectx)
 	vim_free(tofree);
     }
 
-    if (name == NULL || res == FAIL)
+    if (res == FAIL)
     {
 	if (called_emsg == called_emsg_before)
 	    semsg(_(e_unknownfunc),
@@ -1382,9 +1382,18 @@ call_def_function(
 	    // execute Ex command line
 	    case ISN_EXEC:
 		{
+		    source_cookie_T cookie;
+
 		    SOURCING_LNUM = iptr->isn_lnum;
-		    do_cmdline_cmd(iptr->isn_arg.string);
-		    if (did_emsg)
+		    // Pass getsourceline to get an error for a missing ":end"
+		    // command.
+		    CLEAR_FIELD(cookie);
+		    cookie.sourcing_lnum = iptr->isn_lnum - 1;
+		    if (do_cmdline(iptr->isn_arg.string,
+				getsourceline, &cookie,
+				   DOCMD_VERBOSE|DOCMD_NOWAIT|DOCMD_KEYTYPED)
+									== FAIL
+				|| did_emsg)
 			goto on_error;
 		}
 		break;
