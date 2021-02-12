@@ -506,6 +506,7 @@ syn keyword     cType           u8_t u16_t u32_t u64_t
 syn keyword     cType           s8_t s16_t s32_t s64_t
 syn keyword     cType           f32_t f64_t f128_t
 syn keyword     cType           ch8_t ch16_t ch32_t ch64_t
+syn keyword     cType           utf8_t ascii_t
 syn keyword     cType           fd_t
 
 " This was missing from the official file.
