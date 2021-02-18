@@ -501,6 +501,7 @@ syn keyword     cCompilerHint   UNLIKELY LIKELY
 syn keyword     cCompilerHint   PTR
 syn keyword     cStorageClass   OUT
 syn keyword     cStorageClass   UNUSED
+syn keyword     cStorageClass   ATOMIC
 syn keyword     cType           rc_t rc8_t rc16_t rc32_t rc64_t
 syn keyword     cType           u8_t u16_t u32_t u64_t
 syn keyword     cType           s8_t s16_t s32_t s64_t
