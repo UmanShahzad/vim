@@ -513,6 +513,7 @@ syn keyword     cType           atomic_u8_t atomic_u16_t atomic_u32_t atomic_u64
 syn keyword     cType           atomic_s8_t atomic_s16_t atomic_s32_t atomic_s64_t
 syn keyword     cType           atomic_ch8_t atomic_ch16_t atomic_ch32_t atomic_ch64_t
 syn keyword     cType           atomic_utf8_t atomic_ascii_t
+syn keyword     cType           atomic_flag_t
 
 " This was missing from the official file.
 syn keyword     cStorageClass   sigjmp_buf
