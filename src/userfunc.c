@@ -80,6 +80,14 @@ one_function_arg(
 	    semsg(_("E125: Illegal argument: %s"), arg);
 	return arg;
     }
+
+    // Vim9 script: cannot use script var name for argument.
+    if (argtypes != NULL && script_var_exists(arg, p - arg, FALSE, NULL) == OK)
+    {
+	semsg(_(e_variable_already_declared_in_script), arg);
+	return arg;
+    }
+
     if (newargs != NULL && ga_grow(newargs, 1) == FAIL)
 	return arg;
     if (newargs != NULL)
@@ -4020,7 +4028,7 @@ ex_defcompile(exarg_T *eap UNUSED)
 		    && ufunc->uf_def_status == UF_TO_BE_COMPILED
 		    && (ufunc->uf_flags & FC_DEAD) == 0)
 	    {
-		compile_def_function(ufunc, FALSE, FALSE, NULL);
+		(void)compile_def_function(ufunc, FALSE, FALSE, NULL);
 
 		if (func_hashtab.ht_changed != changed)
 		{

@@ -577,6 +577,16 @@ def Test_try_catch_throw()
     counter += 1
   endfor
   assert_equal(4, counter)
+
+  # return in finally after empty catch
+  def ReturnInFinally(): number
+    try
+    finally
+      return 4
+    endtry
+    return 2
+  enddef
+  assert_equal(4, ReturnInFinally())
 enddef
 
 def Test_cnext_works_in_catch()
@@ -3496,6 +3506,11 @@ def Test_unsupported_commands()
       ka
   END
   CheckDefAndScriptFailure(lines, 'E1100:')
+
+  lines =<< trim END
+      :1ka
+  END
+  CheckDefAndScriptFailure(lines, 'E481:')
 
   lines =<< trim END
     t
