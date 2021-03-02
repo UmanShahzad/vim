@@ -485,18 +485,13 @@ syn keyword     cOperator       ASSERT_CSTR_NPRE
 syn keyword     cOperator       ASSERT_CSTR_NSUB
 syn keyword     cOperator       ASSERT_CSTR_PRE
 syn keyword     cOperator       ASSERT_CSTR_SUB
-syn keyword     cOperator       ASSERT_EQ
-syn keyword     cOperator       ASSERT_FALSE
-syn keyword     cOperator       ASSERT_GT
-syn keyword     cOperator       ASSERT_GTE
-syn keyword     cOperator       ASSERT_LT
-syn keyword     cOperator       ASSERT_LTE
-syn keyword     cOperator       ASSERT_NEG1
-syn keyword     cOperator       ASSERT_NEQ
-syn keyword     cOperator       ASSERT_NNULL
-syn keyword     cOperator       ASSERT_NULL
-syn keyword     cOperator       ASSERT_TRUE
-syn keyword     cOperator       ASSERT_ZERO
+syn keyword     cOperator       ASSERT_EQ ASSERT_NEQ
+syn keyword     cOperator       ASSERT_GT ASSERT_GTE
+syn keyword     cOperator       ASSERT_LT ASSERT_LTE
+syn keyword     cOperator       ASSERT_NULL ASSERT_NNULL
+syn keyword     cOperator       ASSERT_RC ASSERT_NRC
+syn keyword     cOperator       ASSERT_TRUE ASSERT_FALSE
+syn keyword     cOperator       ASSERT_ZERO ASSERT_NEG1
 syn keyword     cCompilerHint   UNLIKELY LIKELY
 syn keyword     cCompilerHint   PTR
 syn keyword     cStorageClass   OUT
