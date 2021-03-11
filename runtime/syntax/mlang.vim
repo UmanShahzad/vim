@@ -452,15 +452,15 @@ endif
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " mlang extensions from c
 
-syn keyword     cStatement      fn output defer check
+syn keyword     cStatement      fn defer check ret
 syn keyword     cRepeat         loop
 syn keyword     cTypedef        type
 syn match       cCompilerHint   "@unused"
 syn match       cCompilerHint   "@inline"
 syn match       cCompilerHint   "@no_inline"
 syn match       cCompilerHint   "@priv"
-syn match       cCompilerHint   "@flags"
-syn match       cCompilerHint   "@import"
+syn match       cCompilerHint   "@opt"
+syn match       cCompilerHint   "@out"
 syn keyword     cOperator       STATIC_UNREACHABLE
 syn keyword     cOperator       STATIC_OFFSET
 syn keyword     cOperator       STATIC_CONTAINER
