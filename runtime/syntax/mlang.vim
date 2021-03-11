@@ -459,7 +459,6 @@ syn match       cCompilerHint   "@unused"
 syn match       cCompilerHint   "@inline"
 syn match       cCompilerHint   "@no_inline"
 syn match       cCompilerHint   "@priv"
-syn match       cCompilerHint   "@opt"
 syn match       cCompilerHint   "@out"
 syn keyword     cOperator       STATIC_UNREACHABLE
 syn keyword     cOperator       STATIC_OFFSET
