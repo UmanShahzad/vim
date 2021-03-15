@@ -30,7 +30,7 @@ typedef struct {
     int	    tcd_finally_idx;	// instruction of the :finally block or zero
     int	    tcd_endtry_idx;	// instruction of the :endtry
     int	    tcd_caught;		// catch block entered
-    int	    tcd_cont;		// :continue encountered, jump here
+    int	    tcd_cont;		// :continue encountered, jump here (minus one)
     int	    tcd_return;		// when TRUE return from end of :finally
 } trycmd_T;
 
@@ -985,8 +985,9 @@ allocate_if_null(typval_T *tv)
 }
 
 /*
- * Return the character "str[index]" where "index" is the character index.  If
- * "index" is out of range NULL is returned.
+ * Return the character "str[index]" where "index" is the character index,
+ * including composing characters.
+ * If "index" is out of range NULL is returned.
  */
     char_u *
 char_from_string(char_u *str, varnumber_T index)
@@ -1005,7 +1006,7 @@ char_from_string(char_u *str, varnumber_T index)
 	int	clen = 0;
 
 	for (nbyte = 0; nbyte < slen; ++clen)
-	    nbyte += MB_CPTR2LEN(str + nbyte);
+	    nbyte += mb_ptr2len(str + nbyte);
 	nchar = clen + index;
 	if (nchar < 0)
 	    // unlike list: index out of range results in empty string
@@ -1013,15 +1014,15 @@ char_from_string(char_u *str, varnumber_T index)
     }
 
     for (nbyte = 0; nchar > 0 && nbyte < slen; --nchar)
-	nbyte += MB_CPTR2LEN(str + nbyte);
+	nbyte += mb_ptr2len(str + nbyte);
     if (nbyte >= slen)
 	return NULL;
-    return vim_strnsave(str + nbyte, MB_CPTR2LEN(str + nbyte));
+    return vim_strnsave(str + nbyte, mb_ptr2len(str + nbyte));
 }
 
 /*
  * Get the byte index for character index "idx" in string "str" with length
- * "str_len".
+ * "str_len".  Composing characters are included.
  * If going over the end return "str_len".
  * If "idx" is negative count from the end, -1 is the last character.
  * When going over the start return -1.
@@ -1036,7 +1037,7 @@ char_idx2byte(char_u *str, size_t str_len, varnumber_T idx)
     {
 	while (nchar > 0 && nbyte < str_len)
 	{
-	    nbyte += MB_CPTR2LEN(str + nbyte);
+	    nbyte += mb_ptr2len(str + nbyte);
 	    --nchar;
 	}
     }
@@ -1056,7 +1057,8 @@ char_idx2byte(char_u *str, size_t str_len, varnumber_T idx)
 }
 
 /*
- * Return the slice "str[first:last]" using character indexes.
+ * Return the slice "str[first : last]" using character indexes.  Composing
+ * characters are included.
  * "exclusive" is TRUE for slice().
  * Return NULL when the result is empty.
  */
@@ -1079,7 +1081,7 @@ string_slice(char_u *str, varnumber_T first, varnumber_T last, int exclusive)
 	end_byte = char_idx2byte(str, slen, last);
 	if (!exclusive && end_byte >= 0 && end_byte < (long)slen)
 	    // end index is inclusive
-	    end_byte += MB_CPTR2LEN(str + end_byte);
+	    end_byte += mb_ptr2len(str + end_byte);
     }
 
     if (start_byte >= (long)slen || end_byte <= start_byte)
@@ -1765,7 +1767,7 @@ call_def_function(
 			goto failed;
 		    SOURCING_LNUM = iptr->isn_lnum;
 		    if (eval_variable(name, (int)STRLEN(name),
-				  STACK_TV_BOT(0), NULL, TRUE, FALSE) == FAIL)
+			      STACK_TV_BOT(0), NULL, EVAL_VAR_VERBOSE) == FAIL)
 			goto on_error;
 		    ++ectx.ec_stack.ga_len;
 		}
@@ -2757,7 +2759,9 @@ call_def_function(
 		    {
 			trycmd = ((trycmd_T *)trystack->ga_data)
 							+ trystack->ga_len - i;
-			trycmd->tcd_cont = iidx;
+			// Add one to tcd_cont to be able to jump to
+			// instruction with index zero.
+			trycmd->tcd_cont = iidx + 1;
 			iidx = trycmd->tcd_finally_idx == 0
 			    ? trycmd->tcd_endtry_idx : trycmd->tcd_finally_idx;
 		    }
@@ -2811,7 +2815,7 @@ call_def_function(
 			if (trycmd->tcd_cont != 0)
 			    // handling :continue: jump to outer try block or
 			    // start of the loop
-			    ectx.ec_iidx = trycmd->tcd_cont;
+			    ectx.ec_iidx = trycmd->tcd_cont - 1;
 		    }
 		}
 		break;
@@ -3247,8 +3251,9 @@ call_def_function(
 			res = string_slice(tv->vval.v_string, n1, n2, FALSE);
 		    else
 			// Index: The resulting variable is a string of a
-			// single character.  If the index is too big or
-			// negative the result is empty.
+			// single character (including composing characters).
+			// If the index is too big or negative the result is
+			// empty.
 			res = char_from_string(tv->vval.v_string, n2);
 		    vim_free(tv->vval.v_string);
 		    tv->vval.v_string = res;
