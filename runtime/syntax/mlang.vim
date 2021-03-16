@@ -495,6 +495,9 @@ syn keyword     cCompilerHint   UNLIKELY LIKELY
 syn keyword     cCompilerHint   PTR
 syn keyword     cStorageClass   OUT
 syn keyword     cStorageClass   UNUSED
+syn keyword     cStorageClass   PACKED
+syn keyword     cStorageClass   FUNC_RAW
+syn keyword     cStorageClass   ALIAS
 syn keyword     cStorageClass   ATOMIC
 syn match       cType           display "\<[0-9a-z_]\+_t\>"
 
