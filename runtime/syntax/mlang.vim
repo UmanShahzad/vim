@@ -500,6 +500,7 @@ syn keyword     cType           rc_t rc8_t rc16_t rc32_t rc64_t
 syn keyword     cType           u8_t u16_t u32_t u64_t u128_t
 syn keyword     cType           s8_t s16_t s32_t s64_t s128_t
 syn keyword     cType           f32_t f64_t f128_t
+syn keyword     cType           byte_t
 syn keyword     cType           ch8_t ch16_t ch32_t ch64_t
 syn keyword     cType           utf8_t ascii_t
 syn keyword     cType           cstr_t mstr_t mstr8_t mstr16_t mstr32_t mstr64_t
