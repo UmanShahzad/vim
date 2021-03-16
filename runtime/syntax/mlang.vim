@@ -496,20 +496,7 @@ syn keyword     cCompilerHint   PTR
 syn keyword     cStorageClass   OUT
 syn keyword     cStorageClass   UNUSED
 syn keyword     cStorageClass   ATOMIC
-syn keyword     cType           rc_t rc8_t rc16_t rc32_t rc64_t
-syn keyword     cType           u8_t u16_t u32_t u64_t u128_t
-syn keyword     cType           s8_t s16_t s32_t s64_t s128_t
-syn keyword     cType           f32_t f64_t f128_t
-syn keyword     cType           byte_t
-syn keyword     cType           ch8_t ch16_t ch32_t ch64_t
-syn keyword     cType           utf8_t ascii_t
-syn keyword     cType           cstr_t mstr_t mstr8_t mstr16_t mstr32_t mstr64_t
-syn keyword     cType           fd_t
-syn keyword     cType           atomic_u8_t atomic_u16_t atomic_u32_t atomic_u64_t
-syn keyword     cType           atomic_s8_t atomic_s16_t atomic_s32_t atomic_s64_t
-syn keyword     cType           atomic_ch8_t atomic_ch16_t atomic_ch32_t atomic_ch64_t
-syn keyword     cType           atomic_utf8_t atomic_ascii_t
-syn keyword     cType           atomic_flag_t
+syn match       cType           display "\<[0-9a-z_]\+_t\>"
 
 " This was missing from the official file.
 syn keyword     cStorageClass   sigjmp_buf
