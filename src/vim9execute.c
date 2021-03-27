@@ -796,6 +796,21 @@ call_ufunc(
 }
 
 /*
+ * If command modifiers were applied restore them.
+ */
+    static void
+may_restore_cmdmod(funclocal_T *funclocal)
+{
+    if (funclocal->floc_restore_cmdmod)
+    {
+	cmdmod.cmod_filter_regmatch.regprog = NULL;
+	undo_cmdmod(&cmdmod);
+	cmdmod = funclocal->floc_save_cmdmod;
+	funclocal->floc_restore_cmdmod = FALSE;
+    }
+}
+
+/*
  * Return TRUE if an error was given or CTRL-C was pressed.
  */
     static int
@@ -1052,13 +1067,22 @@ char_from_string(char_u *str, varnumber_T index)
 	return NULL;
     slen = STRLEN(str);
 
-    // do the same as for a list: a negative index counts from the end
+    // Do the same as for a list: a negative index counts from the end.
+    // Optimization to check the first byte to be below 0x80 (and no composing
+    // character follows) makes this a lot faster.
     if (index < 0)
     {
 	int	clen = 0;
 
 	for (nbyte = 0; nbyte < slen; ++clen)
-	    nbyte += mb_ptr2len(str + nbyte);
+	{
+	    if (str[nbyte] < 0x80 && str[nbyte + 1] < 0x80)
+		++nbyte;
+	    else if (enc_utf8)
+		nbyte += utfc_ptr2len(str + nbyte);
+	    else
+		nbyte += mb_ptr2len(str + nbyte);
+	}
 	nchar = clen + index;
 	if (nchar < 0)
 	    // unlike list: index out of range results in empty string
@@ -1066,7 +1090,14 @@ char_from_string(char_u *str, varnumber_T index)
     }
 
     for (nbyte = 0; nchar > 0 && nbyte < slen; --nchar)
-	nbyte += mb_ptr2len(str + nbyte);
+    {
+	if (str[nbyte] < 0x80 && str[nbyte + 1] < 0x80)
+	    ++nbyte;
+	else if (enc_utf8)
+	    nbyte += utfc_ptr2len(str + nbyte);
+	else
+	    nbyte += mb_ptr2len(str + nbyte);
+    }
     if (nbyte >= slen)
 	return NULL;
     return vim_strnsave(str + nbyte, mb_ptr2len(str + nbyte));
@@ -2710,33 +2741,76 @@ call_def_function(
 	    // top of a for loop
 	    case ISN_FOR:
 		{
-		    list_T	*list = STACK_TV_BOT(-1)->vval.v_list;
+		    typval_T	*ltv = STACK_TV_BOT(-1);
 		    typval_T	*idxtv =
 				   STACK_TV_VAR(iptr->isn_arg.forloop.for_idx);
 
-		    // push the next item from the list
 		    if (GA_GROW(&ectx.ec_stack, 1) == FAIL)
 			goto failed;
-		    ++idxtv->vval.v_number;
-		    if (list == NULL || idxtv->vval.v_number >= list->lv_len)
-			// past the end of the list, jump to "endfor"
-			ectx.ec_iidx = iptr->isn_arg.forloop.for_end;
-		    else if (list->lv_first == &range_list_item)
+		    if (ltv->v_type == VAR_LIST)
 		    {
-			// non-materialized range() list
-			tv = STACK_TV_BOT(0);
-			tv->v_type = VAR_NUMBER;
-			tv->v_lock = 0;
-			tv->vval.v_number = list_find_nr(
+			list_T *list = ltv->vval.v_list;
+
+			// push the next item from the list
+			++idxtv->vval.v_number;
+			if (list == NULL
+				       || idxtv->vval.v_number >= list->lv_len)
+			{
+			    // past the end of the list, jump to "endfor"
+			    ectx.ec_iidx = iptr->isn_arg.forloop.for_end;
+			    may_restore_cmdmod(&funclocal);
+			}
+			else if (list->lv_first == &range_list_item)
+			{
+			    // non-materialized range() list
+			    tv = STACK_TV_BOT(0);
+			    tv->v_type = VAR_NUMBER;
+			    tv->v_lock = 0;
+			    tv->vval.v_number = list_find_nr(
 					     list, idxtv->vval.v_number, NULL);
-			++ectx.ec_stack.ga_len;
+			    ++ectx.ec_stack.ga_len;
+			}
+			else
+			{
+			    listitem_T *li = list_find(list,
+							 idxtv->vval.v_number);
+
+			    copy_tv(&li->li_tv, STACK_TV_BOT(0));
+			    ++ectx.ec_stack.ga_len;
+			}
+		    }
+		    else if (ltv->v_type == VAR_STRING)
+		    {
+			char_u	*str = ltv->vval.v_string;
+			int	len = str == NULL ? 0 : (int)STRLEN(str);
+
+			// Push the next character from the string.  The index
+			// is for the last byte of the previous character.
+			++idxtv->vval.v_number;
+			if (idxtv->vval.v_number >= len)
+			{
+			    // past the end of the string, jump to "endfor"
+			    ectx.ec_iidx = iptr->isn_arg.forloop.for_end;
+			    may_restore_cmdmod(&funclocal);
+			}
+			else
+			{
+			    int	clen = mb_ptr2len(str + idxtv->vval.v_number);
+
+			    tv = STACK_TV_BOT(0);
+			    tv->v_type = VAR_STRING;
+			    tv->vval.v_string = vim_strnsave(
+					     str + idxtv->vval.v_number, clen);
+			    ++ectx.ec_stack.ga_len;
+			    idxtv->vval.v_number += clen - 1;
+			}
 		    }
 		    else
 		    {
-			listitem_T *li = list_find(list, idxtv->vval.v_number);
-
-			copy_tv(&li->li_tv, STACK_TV_BOT(0));
-			++ectx.ec_stack.ga_len;
+			// TODO: support Blob
+			semsg(_(e_for_loop_on_str_not_supported),
+						    vartype_name(ltv->v_type));
+			goto failed;
 		    }
 		}
 		break;
@@ -2755,9 +2829,12 @@ call_def_function(
 		    CLEAR_POINTER(trycmd);
 		    trycmd->tcd_frame_idx = ectx.ec_frame_idx;
 		    trycmd->tcd_stack_len = ectx.ec_stack.ga_len;
-		    trycmd->tcd_catch_idx = iptr->isn_arg.try.try_ref->try_catch;
-		    trycmd->tcd_finally_idx = iptr->isn_arg.try.try_ref->try_finally;
-		    trycmd->tcd_endtry_idx = iptr->isn_arg.try.try_ref->try_endtry;
+		    trycmd->tcd_catch_idx =
+					  iptr->isn_arg.try.try_ref->try_catch;
+		    trycmd->tcd_finally_idx =
+					iptr->isn_arg.try.try_ref->try_finally;
+		    trycmd->tcd_endtry_idx =
+					 iptr->isn_arg.try.try_ref->try_endtry;
 		}
 		break;
 
@@ -2782,13 +2859,7 @@ call_def_function(
 		{
 		    garray_T	*trystack = &ectx.ec_trystack;
 
-		    if (funclocal.floc_restore_cmdmod)
-		    {
-			cmdmod.cmod_filter_regmatch.regprog = NULL;
-			undo_cmdmod(&cmdmod);
-			cmdmod = funclocal.floc_save_cmdmod;
-			funclocal.floc_restore_cmdmod = FALSE;
-		    }
+		    may_restore_cmdmod(&funclocal);
 		    if (trystack->ga_len > 0)
 		    {
 			trycmd_T    *trycmd = ((trycmd_T *)trystack->ga_data)
