@@ -460,30 +460,22 @@ syn match       cCompilerHint   "@inline"
 syn match       cCompilerHint   "@no_inline"
 syn match       cCompilerHint   "@priv"
 syn match       cCompilerHint   "@out"
-syn keyword     cOperator       STATIC_UNREACHABLE
-syn keyword     cOperator       STATIC_OFFSET
-syn keyword     cOperator       STATIC_CONTAINER
-syn keyword     cOperator       STATIC_SIZE
-syn keyword     cOperator       STATIC_ARR_SIZE
-syn keyword     cOperator       STATIC_CSTR_LEN
-syn keyword     cOperator       STATIC_ASSERT
+syn keyword     cOperator       CT_OFFSET
+syn keyword     cOperator       CT_CONTAINER
+syn keyword     cOperator       CT_SIZE
+syn keyword     cOperator       CT_ARR_SIZE
+syn keyword     cOperator       CT_CSTR_LEN
+syn keyword     cOperator       CT_ASSERT
 syn keyword     cOperator       LOG LOG_D LOG_V LOG_I LOG_W LOG_E
 syn keyword     cOperator       LOGL LOGL_D LOGL_V LOGL_I LOGL_W LOGL_E
 syn keyword     cOperator       ASSERT
-syn keyword     cOperator       ASSERT_ADDR_EQ
-syn keyword     cOperator       ASSERT_ADDR_NEQ
-syn keyword     cOperator       ASSERT_BYTES_EQ
-syn keyword     cOperator       ASSERT_BYTES_EQ_C
-syn keyword     cOperator       ASSERT_BYTES_NEQ
-syn keyword     cOperator       ASSERT_BYTES_NEQ_C
-syn keyword     cOperator       ASSERT_CSTR_LEN
-syn keyword     cOperator       ASSERT_CSTR_EQ
-syn keyword     cOperator       ASSERT_CSTR_NEQ
-syn keyword     cOperator       ASSERT_CSTR_NLEN
-syn keyword     cOperator       ASSERT_CSTR_NPRE
-syn keyword     cOperator       ASSERT_CSTR_NSUB
-syn keyword     cOperator       ASSERT_CSTR_PRE
-syn keyword     cOperator       ASSERT_CSTR_SUB
+syn keyword     cOperator       ASSERT_ADDR_EQ ASSERT_ADDR_NEQ
+syn keyword     cOperator       ASSERT_BYTES_EQ ASSERT_BYTES_NEQ
+syn keyword     cOperator       ASSERT_BYTES_EQ_C ASSERT_BYTES_NEQ_C
+syn keyword     cOperator       ASSERT_CSTR_LEN ASSERT_CSTR_NLEN
+syn keyword     cOperator       ASSERT_CSTR_EQ ASSERT_CSTR_NEQ
+syn keyword     cOperator       ASSERT_CSTR_PRE ASSERT_CSTR_NPRE
+syn keyword     cOperator       ASSERT_CSTR_SUB ASSERT_CSTR_NSUB
 syn keyword     cOperator       ASSERT_EQ ASSERT_NEQ
 syn keyword     cOperator       ASSERT_GT ASSERT_GTE
 syn keyword     cOperator       ASSERT_LT ASSERT_LTE
@@ -491,14 +483,8 @@ syn keyword     cOperator       ASSERT_NULL ASSERT_NNULL
 syn keyword     cOperator       ASSERT_RC ASSERT_NRC
 syn keyword     cOperator       ASSERT_TRUE ASSERT_FALSE
 syn keyword     cOperator       ASSERT_ZERO ASSERT_NEG1
-syn keyword     cCompilerHint   UNLIKELY LIKELY
-syn keyword     cCompilerHint   PTR
-syn keyword     cStorageClass   OUT
-syn keyword     cStorageClass   UNUSED
-syn keyword     cStorageClass   PACKED
-syn keyword     cStorageClass   FUNC_RAW
-syn keyword     cStorageClass   ALIAS
-syn keyword     cStorageClass   ATOMIC
+syn keyword     cCompilerHint   UNLIKELY LIKELY UNREACHABLE PTR
+syn keyword     cStorageClass   OUT UNUSED PACKED FUNC_RAW ALIAS ATOMIC
 syn match       cType           display "\<[0-9a-z_]\+_t\>"
 
 " This was missing from the official file.
