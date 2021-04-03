@@ -2720,11 +2720,17 @@ compile_load_scriptvar(
 								   cctx, TRUE);
 	    *p = cc;
 	    p = skipwhite(p);
-
-	    // TODO: what if it is a function?
-	    if (idx < 0)
-		return FAIL;
 	    *end = p;
+
+	    if (idx < 0)
+	    {
+		if (*p == '(' && ufunc != NULL)
+		{
+		    generate_PUSHFUNC(cctx, ufunc->uf_name, import->imp_type);
+		    return OK;
+		}
+		return FAIL;
+	    }
 
 	    generate_VIM9SCRIPT(cctx, ISN_LOADSCRIPT,
 		    import->imp_sid,
@@ -2816,7 +2822,7 @@ compile_load(
 		case 'v': res = generate_LOADV(cctx, name, error);
 			  break;
 		case 's': res = compile_load_scriptvar(cctx, name,
-							    NULL, NULL, error);
+							    NULL, &end, error);
 			  break;
 		case 'g': if (vim_strchr(name, AUTOLOAD_CHAR) == NULL)
 			      isn_type = ISN_LOADG;
@@ -5746,7 +5752,8 @@ compile_lhs(
 				      &lhs->lhs_opt_flags, &lhs->lhs_vimvaridx,
 						 &lhs->lhs_type, cctx) == FAIL)
 	    return FAIL;
-	if (lhs->lhs_dest != dest_local)
+	if (lhs->lhs_dest != dest_local
+				 && cmdidx != CMD_const && cmdidx != CMD_final)
 	{
 	    // Specific kind of variable recognized.
 	    declare_error = is_decl;
@@ -6513,6 +6520,7 @@ compile_assignment(char_u *arg, exarg_T *eap, cmdidx_T cmdidx, cctx_T *cctx)
 	else
 	{
 	    if (is_decl && cmdidx == CMD_const && (lhs.lhs_dest == dest_script
+						|| lhs.lhs_dest == dest_global
 						|| lhs.lhs_dest == dest_local))
 		// ":const var": lock the value, but not referenced variables
 		generate_LOCKCONST(cctx);

@@ -1277,6 +1277,13 @@ def Test_var_declaration()
     g:FLIST[0] = 22
     assert_equal([22], g:FLIST)
 
+    def SetGlobalConst()
+      const g:globConst = 123
+    enddef
+    SetGlobalConst()
+    assert_equal(123, g:globConst)
+    assert_true(islocked('g:globConst'))
+
     const w:FOO: number = 46
     assert_equal(46, w:FOO)
     const w:FOOS = 'wfoos'
@@ -1338,6 +1345,38 @@ def Test_var_declaration_fails()
   END
   CheckScriptFailure(lines, 'E741:')
   unlet g:constvar
+
+  lines =<< trim END
+    vim9script
+    var name = 'one'
+    lockvar name
+    def SetLocked()
+      name = 'two'
+    enddef
+    SetLocked()
+  END
+  CheckScriptFailure(lines, 'E741: Value is locked: name', 1)
+
+  lines =<< trim END
+    let s:legacy = 'one'
+    lockvar s:legacy
+    def SetLocked()
+      s:legacy = 'two'
+    enddef
+    call SetLocked()
+  END
+  CheckScriptFailure(lines, 'E741: Value is locked: s:legacy', 1)
+
+  lines =<< trim END
+    vim9script
+    def SetGlobalConst()
+      const g:globConst = 123
+    enddef
+    SetGlobalConst()
+    g:globConst = 234
+  END
+  CheckScriptFailure(lines, 'E741: Value is locked: globConst', 1)
+  unlet g:globConst
 
   lines =<< trim END
     vim9script
