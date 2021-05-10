@@ -1259,6 +1259,12 @@ fill_partial_and_closure(partial_T *pt, ufunc_T *ufunc, ectx_T *ectx)
     return OK;
 }
 
+// used for v_instr of typval of VAR_INSTR
+struct instr_S {
+    ectx_T	*instr_ectx;
+    isn_T	*instr_instr;
+};
+
 // used for substitute_instr
 typedef struct subs_expr_S {
     ectx_T	*subs_ectx;
@@ -1379,6 +1385,23 @@ exec_instructions(ectx_T *ectx)
 		}
 		break;
 
+	    // push typeval VAR_INSTR with instructions to be executed
+	    case ISN_INSTR:
+		{
+		    if (GA_GROW(&ectx->ec_stack, 1) == FAIL)
+			return FAIL;
+		    tv = STACK_TV_BOT(0);
+		    tv->vval.v_instr = ALLOC_ONE(instr_T);
+		    if (tv->vval.v_instr == NULL)
+			goto on_error;
+		    ++ectx->ec_stack.ga_len;
+
+		    tv->v_type = VAR_INSTR;
+		    tv->vval.v_instr->instr_ectx = ectx;
+		    tv->vval.v_instr->instr_instr = iptr->isn_arg.instr;
+		}
+		break;
+
 	    // execute :substitute with an expression
 	    case ISN_SUBSTITUTE:
 		{
@@ -1440,6 +1463,33 @@ exec_instructions(ectx_T *ectx)
 		    tv->vval.v_string = res;
 		    ++ectx->ec_stack.ga_len;
 		}
+		break;
+
+	    case ISN_CEXPR_AUCMD:
+#ifdef FEAT_QUICKFIX
+		if (trigger_cexpr_autocmd(iptr->isn_arg.number) == FAIL)
+		    goto on_error;
+#endif
+		break;
+
+	    case ISN_CEXPR_CORE:
+#ifdef FEAT_QUICKFIX
+		{
+		    exarg_T ea;
+		    int	    res;
+
+		    CLEAR_FIELD(ea);
+		    ea.cmdidx = iptr->isn_arg.cexpr.cexpr_ref->cer_cmdidx;
+		    ea.forceit = iptr->isn_arg.cexpr.cexpr_ref->cer_forceit;
+		    ea.cmdlinep = &iptr->isn_arg.cexpr.cexpr_ref->cer_cmdline;
+		    --ectx->ec_stack.ga_len;
+		    tv = STACK_TV_BOT(0);
+		    res = cexpr_core(&ea, tv);
+		    clear_tv(tv);
+		    if (res == FAIL)
+			goto on_error;
+		}
+#endif
 		break;
 
 	    // execute Ex command from pieces on the stack
@@ -1528,7 +1578,8 @@ exec_instructions(ectx_T *ectx)
 						      || tv->v_type == VAR_JOB)
 			    {
 				SOURCING_LNUM = iptr->isn_lnum;
-				emsg(_(e_inval_string));
+				semsg(_(e_using_invalid_value_as_string_str),
+						    vartype_name(tv->v_type));
 				break;
 			    }
 			    else
@@ -3970,6 +4021,33 @@ done:
 }
 
 /*
+ * Execute the instructions from a VAR_INSTR typeval and put the result in
+ * "rettv".
+ * Return OK or FAIL.
+ */
+    int
+exe_typval_instr(typval_T *tv, typval_T *rettv)
+{
+    ectx_T	*ectx = tv->vval.v_instr->instr_ectx;
+    isn_T	*save_instr = ectx->ec_instr;
+    int		save_iidx = ectx->ec_iidx;
+    int		res;
+
+    ectx->ec_instr = tv->vval.v_instr->instr_instr;
+    res = exec_instructions(ectx);
+    if (res == OK)
+    {
+	*rettv = *STACK_TV_BOT(-1);
+	--ectx->ec_stack.ga_len;
+    }
+
+    ectx->ec_instr = save_instr;
+    ectx->ec_iidx = save_iidx;
+
+    return res;
+}
+
+/*
  * Execute the instructions from an ISN_SUBSTITUTE command, which are in
  * "substitute_instr".
  */
@@ -4390,6 +4468,32 @@ list_instructions(char *pfx, isn_T *instr, int instr_count, ufunc_T *ufunc)
 	    case ISN_REDIREND:
 		smsg("%s%4d REDIR END%s", pfx, current,
 					iptr->isn_arg.number ? " append" : "");
+		break;
+	    case ISN_CEXPR_AUCMD:
+#ifdef FEAT_QUICKFIX
+		smsg("%s%4d CEXPR pre %s", pfx, current,
+				       cexpr_get_auname(iptr->isn_arg.number));
+#endif
+		break;
+	    case ISN_CEXPR_CORE:
+#ifdef FEAT_QUICKFIX
+		{
+		    cexprref_T	    *cer = iptr->isn_arg.cexpr.cexpr_ref;
+
+		    smsg("%s%4d CEXPR core %s%s \"%s\"", pfx, current,
+				       cexpr_get_auname(cer->cer_cmdidx),
+				       cer->cer_forceit ? "!" : "",
+				       cer->cer_cmdline);
+		}
+#endif
+		break;
+	    case ISN_INSTR:
+		{
+		    smsg("%s%4d INSTR", pfx, current);
+		    list_instructions("    ", iptr->isn_arg.instr,
+								INT_MAX, NULL);
+		    msg("     -------------");
+		}
 		break;
 	    case ISN_SUBSTITUTE:
 		{
@@ -5180,6 +5284,7 @@ tv2bool(typval_T *tv)
 	case VAR_UNKNOWN:
 	case VAR_ANY:
 	case VAR_VOID:
+	case VAR_INSTR:
 	    break;
     }
     return FALSE;
