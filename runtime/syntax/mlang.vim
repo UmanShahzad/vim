@@ -454,6 +454,7 @@ endif
 
 syn keyword     cStatement      fn defer check ret
 syn keyword     cRepeat         loop
+syn keyword     cRepeat         LOOP
 syn keyword     cTypedef        type
 syn match       cCompilerHint   "@unused"
 syn match       cCompilerHint   "@inline"
