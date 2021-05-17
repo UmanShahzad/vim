@@ -464,7 +464,7 @@ syn match       cCompilerHint   "@out"
 syn keyword     cOperator       CT_OFFSET
 syn keyword     cOperator       CT_CONTAINER
 syn keyword     cOperator       CT_SIZE
-syn keyword     cOperator       CT_ARR_SIZE
+syn keyword     cOperator       CT_ARRSIZE
 syn keyword     cOperator       CT_CSTR_LEN
 syn keyword     cOperator       CT_ASSERT
 syn keyword     cOperator       LOG LOG_D LOG_V LOG_I LOG_W LOG_E
