@@ -497,6 +497,9 @@ syn match       cNumber         display contained "0b[0,1,_]\+\(u\=l\{0,2}\|ll\=
 " match against return codes.
 syn match       cConstant       display "\<RC_[0-9A-Z_]\+\>"
 
+" `nil`
+syn keyword     cConstant       nil
+
 " e.g. @unused
 hi def link     cCompilerHint   Keyword
 
