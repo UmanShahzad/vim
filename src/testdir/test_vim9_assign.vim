@@ -249,6 +249,13 @@ def Test_assignment()
   END
 enddef
 
+def Test_reserved_name()
+  for name in ['true', 'false', 'null']
+    CheckDefExecAndScriptFailure(['var ' .. name .. ' =  0'], 'E1034:')
+    CheckDefExecAndScriptFailure(['var ' .. name .. ': bool'], 'E1034:')
+  endfor
+enddef
+
 def Test_skipped_assignment()
   var lines =<< trim END
       for x in []
@@ -975,6 +982,8 @@ def Test_assignment_failure()
 
   CheckDefFailure(['var true = 1'], 'E1034:')
   CheckDefFailure(['var false = 1'], 'E1034:')
+  CheckDefFailure(['var null = 1'], 'E1034:')
+  CheckDefFailure(['var this = 1'], 'E1034:')
 
   CheckDefFailure(['[a; b; c] = g:list'], 'E452:')
   CheckDefExecFailure(['var a: number',
@@ -1807,6 +1816,19 @@ def Test_assign_command_modifier()
       silent [x, y] = [1, 2]
       assert_equal(1, x)
       assert_equal(2, y)
+  END
+  CheckDefAndScriptSuccess(lines)
+enddef
+
+def Test_assign_alt_buf_register()
+  var lines =<< trim END
+      edit 'file_b1'
+      var b1 = bufnr()
+      edit 'file_b2'
+      var b2 = bufnr()
+      assert_equal(b1, bufnr('#'))
+      @# = b2
+      assert_equal(b2, bufnr('#'))
   END
   CheckDefAndScriptSuccess(lines)
 enddef

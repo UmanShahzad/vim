@@ -1552,6 +1552,7 @@ func Test_popup_filter()
   call assert_equal(9, getcurpos()[2])
   call feedkeys('0', 'xt')
   call assert_equal('0', g:ignored)
+  redraw
   call assert_equal(1, getcurpos()[2])
 
   " x closes the popup
@@ -1798,6 +1799,11 @@ func Test_popup_title()
   call term_sendkeys(buf, ":call popup_create(['aaa', 'bbb'], #{title: 'Title', minwidth: 12, border: [], padding: [2, 2, 2, 2]})\<CR>")
   call term_sendkeys(buf, ":\<CR>")
   call VerifyScreenDump(buf, 'Test_popupwin_longtitle_4', {})
+
+  call term_sendkeys(buf, ":call popup_clear()\<CR>")
+  call term_sendkeys(buf, ":call popup_menu(['This is a line', 'and another line'], #{title: '▶ÄÖÜ◀', })\<CR>")
+  call VerifyScreenDump(buf, 'Test_popupwin_multibytetitle', {})
+  call term_sendkeys(buf, "x")
 
   " clean up
   call StopVimInTerminal(buf)
@@ -3912,6 +3918,12 @@ func Test_popup_prop_not_visible()
   call StopVimInTerminal(buf)
   call delete('XtestPropNotVisble')
 endfunction
+
+func Test_bufdel_skips_popupwin_buffer()
+    let id = popup_create("Some text", {})
+    %bd
+    call popup_close(id)
+endfunc
 
 
 " vim: shiftwidth=2 sts=2
