@@ -480,7 +480,7 @@ syn keyword     cOperator       ASSERT_CSTR_SUB ASSERT_CSTR_NSUB
 syn keyword     cOperator       ASSERT_EQ ASSERT_NEQ
 syn keyword     cOperator       ASSERT_GT ASSERT_GTE
 syn keyword     cOperator       ASSERT_LT ASSERT_LTE
-syn keyword     cOperator       ASSERT_NULL ASSERT_NNULL
+syn keyword     cOperator       ASSERT_NIL ASSERT_NNIL
 syn keyword     cOperator       ASSERT_RC ASSERT_NRC
 syn keyword     cOperator       ASSERT_TRUE ASSERT_FALSE
 syn keyword     cOperator       ASSERT_ZERO ASSERT_NEG1
