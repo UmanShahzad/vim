@@ -169,7 +169,8 @@ func Test_strwidth()
 
   if has('float')
     call assert_equal(3, strwidth(1.2))
-    call CheckDefExecAndScriptFailure(['echo strwidth(1.2)'], 'E806:')
+    call CheckDefFailure(['echo strwidth(1.2)'], 'E1013:')
+    call CheckScriptFailure(['vim9script', 'echo strwidth(1.2)'], 'E806:')
   endif
 
   set ambiwidth&
@@ -236,7 +237,7 @@ func Test_str2nr()
   call assert_fails('call str2nr({->2})', 'E729:')
   if has('float')
     call assert_equal(1, str2nr(1.2))
-    call CheckDefExecFailure(['echo str2nr(1.2)'], 'E1013:')
+    call CheckDefFailure(['echo str2nr(1.2)'], 'E1013:')
     call CheckScriptFailure(['vim9script', 'echo str2nr(1.2)'], 'E806:')
   endif
   call assert_fails('call str2nr(10, [])', 'E745:')
@@ -499,7 +500,8 @@ func Test_simplify()
   call assert_fails('call simplify({})', 'E731:')
   if has('float')
     call assert_equal('1.2', simplify(1.2))
-    call CheckDefExecAndScriptFailure(['echo simplify(1.2)'], 'E806:')
+    call CheckDefFailure(['echo simplify(1.2)'], 'E1013:')
+    call CheckScriptFailure(['vim9script', 'echo simplify(1.2)'], 'E806:')
   endif
 endfunc
 
@@ -1579,31 +1581,6 @@ func Test_redo_in_nested_functions()
   delfunc Apply
 endfunc
 
-func Test_shellescape()
-  let save_shell = &shell
-  set shell=bash
-  call assert_equal("'text'", shellescape('text'))
-  call assert_equal("'te\"xt'", 'te"xt'->shellescape())
-  call assert_equal("'te'\\''xt'", shellescape("te'xt"))
-
-  call assert_equal("'te%xt'", shellescape("te%xt"))
-  call assert_equal("'te\\%xt'", shellescape("te%xt", 1))
-  call assert_equal("'te#xt'", shellescape("te#xt"))
-  call assert_equal("'te\\#xt'", shellescape("te#xt", 1))
-  call assert_equal("'te!xt'", shellescape("te!xt"))
-  call assert_equal("'te\\!xt'", shellescape("te!xt", 1))
-
-  call assert_equal("'te\nxt'", shellescape("te\nxt"))
-  call assert_equal("'te\\\nxt'", shellescape("te\nxt", 1))
-  set shell=tcsh
-  call assert_equal("'te\\!xt'", shellescape("te!xt"))
-  call assert_equal("'te\\\\!xt'", shellescape("te!xt", 1))
-  call assert_equal("'te\\\nxt'", shellescape("te\nxt"))
-  call assert_equal("'te\\\\\nxt'", shellescape("te\nxt", 1))
-
-  let &shell = save_shell
-endfunc
-
 func Test_trim()
   call assert_equal("Testing", trim("  \t\r\r\x0BTesting  \t\n\r\n\t\x0B\x0B"))
   call assert_equal("Testing", "  \t  \r\r\n\n\x0BTesting  \t\n\r\n\t\x0B\x0B"->trim())
@@ -2194,6 +2171,8 @@ func Test_charclass()
   call assert_equal(1, charclass('.'))
   call assert_equal(2, charclass('x'))
   call assert_equal(3, charclass("\u203c"))
+  " this used to crash vim
+  call assert_equal(0, "xxx"[-1]->charclass())
 endfunc
 
 func Test_eventhandler()

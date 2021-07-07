@@ -216,7 +216,7 @@ eval1_emsg(char_u **arg, typval_T *rettv, exarg_T *eap)
 	// Also check called_emsg for when using assert_fails().
 	if (!aborting() && did_emsg == did_emsg_before
 					  && called_emsg == called_emsg_before)
-	    semsg(_(e_invexpr2), start);
+	    semsg(_(e_invalid_expression_str), start);
     }
     clear_evalarg(&evalarg, eap);
     return ret;
@@ -297,7 +297,7 @@ eval_expr_typval(typval_T *expr, typval_T *argv, int argc, typval_T *rettv)
 	if (*skipwhite(s) != NUL)  // check for trailing chars after expr
 	{
 	    clear_tv(rettv);
-	    semsg(_(e_invexpr2), s);
+	    semsg(_(e_invalid_expression_str), s);
 	    return FAIL;
 	}
     }
@@ -924,17 +924,30 @@ get_lval(
     lp->ll_tv = &v->di_tv;
     var1.v_type = VAR_UNKNOWN;
     var2.v_type = VAR_UNKNOWN;
-    while (*p == '[' || (*p == '.' && lp->ll_tv->v_type == VAR_DICT))
+    while (*p == '[' || (*p == '.' && p[1] != '=' && p[1] != '.'))
     {
-	if (!(lp->ll_tv->v_type == VAR_LIST && lp->ll_tv->vval.v_list != NULL)
-		&& !(lp->ll_tv->v_type == VAR_DICT)
-		&& !(lp->ll_tv->v_type == VAR_BLOB
-					   && lp->ll_tv->vval.v_blob != NULL))
+	if (*p == '.' && lp->ll_tv->v_type != VAR_DICT)
+	{
+	    if (!quiet)
+		semsg(_(e_dot_can_only_be_used_on_dictionary_str), name);
+	    return NULL;
+	}
+	if (lp->ll_tv->v_type != VAR_LIST
+		&& lp->ll_tv->v_type != VAR_DICT
+		&& lp->ll_tv->v_type != VAR_BLOB)
 	{
 	    if (!quiet)
 		emsg(_("E689: Can only index a List, Dictionary or Blob"));
 	    return NULL;
 	}
+
+	// a NULL list/blob works like an empty list/blob, allocate one now.
+	if (lp->ll_tv->v_type == VAR_LIST && lp->ll_tv->vval.v_list == NULL)
+	    rettv_list_alloc(lp->ll_tv);
+	else if (lp->ll_tv->v_type == VAR_BLOB
+					     && lp->ll_tv->vval.v_blob == NULL)
+	    rettv_blob_alloc(lp->ll_tv);
+
 	if (lp->ll_range)
 	{
 	    if (!quiet)
@@ -1195,10 +1208,20 @@ get_lval(
 	    lp->ll_li = list_find_index(lp->ll_list, &lp->ll_n1);
 	    if (lp->ll_li == NULL)
 	    {
-		clear_tv(&var2);
-		if (!quiet)
-		    semsg(_(e_listidx), lp->ll_n1);
-		return NULL;
+		// Vim9: Allow for adding an item at the end.
+		if (in_vim9script() && lp->ll_n1 == lp->ll_list->lv_len
+						  && lp->ll_list->lv_lock == 0)
+		{
+		    list_append_number(lp->ll_list, 0);
+		    lp->ll_li = list_find_index(lp->ll_list, &lp->ll_n1);
+		}
+		if (lp->ll_li == NULL)
+		{
+		    clear_tv(&var2);
+		    if (!quiet)
+			semsg(_(e_listidx), lp->ll_n1);
+		    return NULL;
+		}
 	    }
 
 	    if (lp->ll_valtype != NULL)
@@ -1637,6 +1660,7 @@ eval_for_line(
     evalarg_T	*evalarg)
 {
     forinfo_T	*fi;
+    char_u	*var_list_end;
     char_u	*expr;
     typval_T	tv;
     list_T	*l;
@@ -1648,15 +1672,19 @@ eval_for_line(
     if (fi == NULL)
 	return NULL;
 
-    expr = skip_var_list(arg, TRUE, &fi->fi_varcount, &fi->fi_semicolon, FALSE);
-    if (expr == NULL)
+    var_list_end = skip_var_list(arg, TRUE, &fi->fi_varcount,
+						     &fi->fi_semicolon, FALSE);
+    if (var_list_end == NULL)
 	return fi;
 
-    expr = skipwhite_and_linebreak(expr, evalarg);
+    expr = skipwhite_and_linebreak(var_list_end, evalarg);
     if (expr[0] != 'i' || expr[1] != 'n'
 				  || !(expr[2] == NUL || VIM_ISWHITE(expr[2])))
     {
-	emsg(_(e_missing_in));
+	if (in_vim9script() && *expr == ':' && expr != var_list_end)
+	    semsg(_(e_no_white_space_allowed_before_colon_str), expr);
+	else
+	    emsg(_(e_missing_in));
 	return fi;
     }
 
@@ -1749,7 +1777,10 @@ next_for_item(void *fi_void, char_u *arg)
     forinfo_T	*fi = (forinfo_T *)fi_void;
     int		result;
     int		flag = ASSIGN_FOR_LOOP | (in_vim9script()
-			 ? (ASSIGN_FINAL | ASSIGN_DECL | ASSIGN_NO_MEMBER_TYPE)
+			 ? (ASSIGN_FINAL
+			     // first round: error if variable exists
+			     | (fi->fi_bi == 0 ? 0 : ASSIGN_DECL)
+			     | ASSIGN_NO_MEMBER_TYPE)
 			 : 0);
     listitem_T	*item;
 
@@ -1779,6 +1810,7 @@ next_for_item(void *fi_void, char_u *arg)
 	tv.v_lock = VAR_FIXED;
 	tv.vval.v_string = vim_strnsave(fi->fi_string + fi->fi_byte_idx, len);
 	fi->fi_byte_idx += len;
+	++fi->fi_bi;
 	result = ex_let_vars(arg, &tv, TRUE, fi->fi_semicolon,
 					    fi->fi_varcount, flag, NULL) == OK;
 	vim_free(tv.vval.v_string);
@@ -1791,6 +1823,7 @@ next_for_item(void *fi_void, char_u *arg)
     else
     {
 	fi->fi_lw.lw_item = item->li_next;
+	++fi->fi_bi;
 	result = (ex_let_vars(arg, &item->li_tv, TRUE, fi->fi_semicolon,
 					   fi->fi_varcount, flag, NULL) == OK);
     }
@@ -2245,7 +2278,7 @@ eval0(
 	    if (end_error)
 		semsg(_(e_trailing_arg), p);
 	    else
-		semsg(_(e_invexpr2), arg);
+		semsg(_(e_invalid_expression_str), arg);
 	}
 
 	// Some of the expression may not have been consumed.  Do not check for
@@ -2735,7 +2768,7 @@ eval4(char_u **arg, typval_T *rettv, evalarg_T *evalarg)
 
 	if (vim9script && type_is && (p[len] == '?' || p[len] == '#'))
 	{
-	    semsg(_(e_invexpr2), p);
+	    semsg(_(e_invalid_expression_str), p);
 	    clear_tv(rettv);
 	    return FAIL;
 	}
@@ -3344,7 +3377,7 @@ eval_leader(char_u **arg, int vim9)
 	// ++, --, -+ and +- are not accepted in Vim9 script
 	if (vim9 && (*p == '-' || *p == '+') && (*n == '-' || *n == '+'))
 	{
-	    semsg(_(e_invexpr2), s);
+	    semsg(_(e_invalid_expression_str), s);
 	    return FAIL;
 	}
 	p = n;
@@ -3418,7 +3451,7 @@ eval7(
 #endif
 	    ))
     {
-	semsg(_(e_invexpr2), *arg);
+	semsg(_(e_invalid_expression_str), *arg);
 	++*arg;
 	return FAIL;
     }
@@ -5584,7 +5617,7 @@ get_name_len(
     // Only give an error when there is something, otherwise it will be
     // reported at a higher level.
     if (len == 0 && verbose && **arg != NUL)
-	semsg(_(e_invexpr2), *arg);
+	semsg(_(e_invalid_expression_str), *arg);
 
     return len;
 }
@@ -6130,7 +6163,7 @@ ex_echo(exarg_T *eap)
 	     */
 	    if (!aborting() && did_emsg == did_emsg_before
 					  && called_emsg == called_emsg_before)
-		semsg(_(e_invexpr2), arg_start);
+		semsg(_(e_invalid_expression_str), arg_start);
 	    need_clr_eos = FALSE;
 	    break;
 	}
