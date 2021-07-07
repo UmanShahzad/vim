@@ -11,4 +11,4 @@ set -v
 
 make -j`nproc`
 
-sudo make install -j`nproc`
+sudo make install
