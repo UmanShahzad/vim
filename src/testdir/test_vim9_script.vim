@@ -691,7 +691,7 @@ enddef
 def Test_cnext_works_in_catch()
   var lines =<< trim END
       vim9script
-      au BufEnter * eval 0
+      au BufEnter * eval 1 + 2
       writefile(['text'], 'Xfile1')
       writefile(['text'], 'Xfile2')
       var items = [
@@ -1391,6 +1391,7 @@ def Test_import_as()
     vim9script
     export var one = 1
     export var yes = 'yes'
+    export var slist: list<string>
   END
   writefile(export_lines, 'XexportAs')
 
@@ -1414,6 +1415,13 @@ def Test_import_as()
     assert_fails('echo yes', 'E121:')
   END
   CheckScriptSuccess(import_lines)
+
+  import_lines =<< trim END
+    vim9script
+    import {slist as impSlist} from './XexportAs'
+    impSlist->add(123)
+  END
+  CheckScriptFailure(import_lines, 'E1012: Type mismatch; expected string but got number')
 
   delete('XexportAs')
 enddef
@@ -1746,6 +1754,21 @@ def Test_script_var_shadows_function()
   CheckScriptFailure(lines, 'E1041:', 5)
 enddef
 
+def Test_script_var_shadows_command()
+  var lines =<< trim END
+      var undo = 1
+      undo = 2
+      assert_equal(2, undo)
+  END
+  CheckDefAndScriptSuccess(lines)
+
+  lines =<< trim END
+      var undo = 1
+      undo
+  END
+  CheckDefAndScriptFailure(lines, 'E1207:', 2)
+enddef
+
 def s:RetSome(): string
   return 'some'
 enddef
@@ -1947,7 +1970,7 @@ def Test_import_rtp()
         'g:imported_rtp = exported',
         ]
   writefile(import_lines, 'Ximport_rtp.vim')
-  mkdir('import')
+  mkdir('import', 'p')
   writefile(s:export_script_lines, 'import/Xexport_rtp.vim')
 
   var save_rtp = &rtp
@@ -2262,7 +2285,7 @@ def Test_if_const_expr()
   assert_equal(false, res)
 
   # with constant "false" expression may be invalid so long as the syntax is OK
-  if false | eval 0 | endif
+  if false | eval 1 + 2 | endif
   if false | eval burp + 234 | endif
   if false | echo burp 234 'asd' | endif
   if false
@@ -2488,6 +2511,12 @@ def Test_for_loop()
       endfor
       assert_equal('foobar', chars)
 
+      chars = ''
+      for x: string in {a: 'a', b: 'b'}->values()
+        chars ..= x
+      endfor
+      assert_equal('ab', chars)
+
       # unpack with type
       var res = ''
       for [n: number, s: string] in [[1, 'a'], [2, 'b']]
@@ -2539,6 +2568,7 @@ def Test_for_loop_fails()
   CheckDefAndScriptFailure(['for # in range(5)'], 'E690:')
   CheckDefAndScriptFailure(['for i In range(5)'], 'E690:')
   CheckDefAndScriptFailure2(['var x = 5', 'for x in range(5)', 'endfor'], 'E1017:', 'E1041:')
+  CheckScriptFailure(['vim9script', 'var x = 5', 'for x in range(5)', '# comment', 'endfor'], 'E1041:', 3)
   CheckScriptFailure(['def Func(arg: any)', 'for arg in range(5)', 'enddef', 'defcompile'], 'E1006:')
   delfunc! g:Func
   CheckDefFailure(['for i in xxx'], 'E1001:')
@@ -2573,6 +2603,14 @@ def Test_for_loop_fails()
       endfor
   END
   CheckDefAndScriptFailure(lines, 'E1059:', 1)
+
+  lines =<< trim END
+      var d: dict<number> = {a: 1, b: 2}
+      for [k: job, v: job] in d->items()
+        echo k v
+      endfor
+  END
+  CheckDefExecAndScriptFailure(lines, 'E1012: Type mismatch; expected job but got string', 2)
 enddef
 
 def Test_for_loop_script_var()
@@ -4061,24 +4099,124 @@ def Test_mapping_line_number()
   delfunc g:FuncA
 enddef
 
+def Test_option_set()
+  # legacy script allows for white space
+  var lines =<< trim END
+      set foldlevel  =11
+      call assert_equal(11, &foldlevel)
+  END
+  CheckScriptSuccess(lines)
+
+  set foldlevel
+  set foldlevel=12
+  assert_equal(12, &foldlevel)
+  set foldlevel+=2
+  assert_equal(14, &foldlevel)
+  set foldlevel-=3
+  assert_equal(11, &foldlevel)
+
+  lines =<< trim END
+      set foldlevel =1
+  END
+  CheckDefExecAndScriptFailure(lines, 'E1205: No white space allowed between option and: =1')
+
+  lines =<< trim END
+      set foldlevel +=1
+  END
+  CheckDefExecAndScriptFailure(lines, 'E1205: No white space allowed between option and: +=1')
+
+  lines =<< trim END
+      set foldlevel ^=1
+  END
+  CheckDefExecAndScriptFailure(lines, 'E1205: No white space allowed between option and: ^=1')
+
+  lines =<< trim END
+      set foldlevel -=1
+  END
+  CheckDefExecAndScriptFailure(lines, 'E1205: No white space allowed between option and: -=1')
+
+  set foldlevel&
+enddef
+
 def Test_option_modifier()
+  # legacy script allows for white space
   var lines =<< trim END
       set hlsearch &  hlsearch  !
       call assert_equal(1, &hlsearch)
   END
   CheckScriptSuccess(lines)
 
-  lines =<< trim END
-      vim9script
-      set hlsearch &
-  END
-  CheckScriptFailure(lines, 'E518:')
+  set hlsearch
+  set hlsearch!
+  assert_equal(false, &hlsearch)
+
+  set hlsearch
+  set hlsearch&
+  assert_equal(false, &hlsearch)
 
   lines =<< trim END
-      vim9script
-      set hlsearch &  hlsearch  !
+      set hlsearch &
   END
-  CheckScriptFailure(lines, 'E518:')
+  CheckDefExecAndScriptFailure(lines, 'E1205: No white space allowed between option and: &')
+
+  lines =<< trim END
+      set hlsearch   !
+  END
+  CheckDefExecAndScriptFailure(lines, 'E1205: No white space allowed between option and: !')
+
+  set hlsearch&
+enddef
+
+" This must be called last, it may cause following :def functions to fail
+def Test_xxx_echoerr_line_number()
+  var lines =<< trim END
+      echoerr 'some'
+         .. ' error'
+         .. ' continued'
+  END
+  CheckDefExecAndScriptFailure(lines, 'some error continued', 1)
+enddef
+
+def ProfiledWithLambda()
+  var n = 3
+  echo [[1, 2], [3, 4]]->filter((_, l) => l[0] == n)
+enddef
+
+def ProfiledNested()
+  var x = 0
+  def Nested(): any
+      return x
+  enddef
+  Nested()
+enddef
+
+def ProfiledNestedProfiled()
+  var x = 0
+  def Nested(): any
+      return x
+  enddef
+  Nested()
+enddef
+
+" Execute this near the end, profiling doesn't stop until Vim exists.
+" This only tests that it works, not the profiling output.
+def Test_xx_profile_with_lambda()
+  CheckFeature profile
+
+  profile start Xprofile.log
+  profile func ProfiledWithLambda
+  ProfiledWithLambda()
+
+  profile func ProfiledNested
+  ProfiledNested()
+
+  # Also profile the nested function.  Use a different function, although the
+  # contents is the same, to make sure it was not already compiled.
+  profile func *
+  ProfiledNestedProfiled()
+
+  profdel func *
+  profile pause
 enddef
 
 " Keep this last, it messes up highlighting.
